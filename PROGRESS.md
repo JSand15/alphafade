@@ -9,7 +9,7 @@ and every decision that refines or overrides the spec, with its reason.
 |---|---|
 | M0 Plan, open questions, layout, API | Done (approved 2026-09-26) |
 | M1 Validation/alignment + ic_series, rolling_ic, rolling_sharpe | Done 2026-09-26: 56 passed, 99% coverage |
-| M2 fit_decay (bootstrap CI, linear fallback) | Not started |
+| M2 fit_decay (bootstrap CI, linear fallback) | **In progress**: `src/alphafade/decay.py` written, not yet exported, no tests yet (see M2 notes) |
 | M3 find_break, chow_test, publication_gap (Newey-West) | Not started |
 | M4 crowding_score | Not started |
 | M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | Not started |
@@ -238,3 +238,20 @@ Sharpe unchanged by scaling).
 | 2026-09-26 | `forward_returns` compounds by multiplying shifted (1 + r) terms, not by summing log returns | Summing logs turns a −100% return into −inf and then NaN in pandas' rolling sum |
 | 2026-09-26 | A constant window (max == min) gets NaN rolling Sharpe | pandas' streaming variance leaves float residue on constant windows, which would give a huge fake Sharpe |
 | 2026-09-26 | Tests fail on any unexpected AlphaFadeWarning (autouse fixture in tests/conftest.py) | Forces every lossy path to be tested deliberately. It's a fixture, not ini filterwarnings, so coverage still measures import-time lines |
+
+## M2 notes (session paused 2026-09-26, usage limit)
+- `decay.py` is complete in draft: variable-projection exponential fit (closed-form `a` for
+  each rate, grid search then vectorized golden section, so it can't diverge), linear fit,
+  residual moving-block bootstrap, a linear fallback with FitWarning when the rate hits
+  its bound, and `DecayFit.summary()`.
+- Probe results (scratchpad script, not in the repo):
+  - 60 years × 500 assets with IC = 0.10·exp(−t/5): 7 of 8 seeds were within 10% of the true
+    half-life of 3.47 years, but seed 1 was 33% low. The spec's "within 10%" test therefore
+    needs a longer or wider sample (e.g. 100 years or 2000 assets), or a check on the median
+    across seeds. Verify the choice before writing the test.
+  - Constant IC: 1 false positive in 40 (about 2.5%, as expected at a two-sided 5% level).
+  - Speed: 0.12 s for monthly data (1000 bootstrap draws), 1.1 s for 8000 daily observations.
+- TODO to finish M2: export `fit_decay` and `DecayFit` in `__init__.py`; write tests/test_decay.py
+  (noise-free exact recovery, panel recovery, constant → no decay, growth, bound → linear
+  fallback + FitWarning, better_fit on linear data, rolling input note/block ≥ window,
+  negative-IC decay, seed reproducibility, input validation); run ruff + mypy; commit.
