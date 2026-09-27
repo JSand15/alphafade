@@ -7,16 +7,16 @@ and every decision that refines or overrides the spec, with its reason.
 
 | Milestone | State |
 |---|---|
-| M0 Plan, open questions, layout, API | **Proposed, waiting for Jeevun's approval** |
-| M1 Validation/alignment + ic_series, rolling_ic, rolling_sharpe | Not started |
+| M0 Plan, open questions, layout, API | Done (approved 2026-09-26) |
+| M1 Validation/alignment + ic_series, rolling_ic, rolling_sharpe | Done 2026-09-26: 56 passed, 99% coverage |
 | M2 fit_decay (bootstrap CI, linear fallback) | Not started |
 | M3 find_break, chow_test, publication_gap (Newey-West) | Not started |
 | M4 crowding_score | Not started |
 | M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | Not started |
 | M6 CI, packaging, TestPyPI release | Not started |
 
-**Next action:** get answers to the open questions below, update this file with the answers,
-then start M1. No package code gets written before approval.
+**Next action:** see the first milestone in the table that isn't Done. Jeevun asked (2026-09-26)
+for M1–M6 to be built straight through without stopping for approval between milestones.
 
 ---
 
@@ -224,3 +224,17 @@ Sharpe unchanged by scaling).
 | 2026-09-26 | Borrow from finlearn: PEP 639 `license = "MIT"`, Keep a Changelog, CONTRIBUTING.md, trusted-publishing release workflow with `environment: pypi` | Consistency across Jeevun's libraries |
 | 2026-09-26 | Custom exceptions subclass `ValueError` | Specific errors per spec, but `except ValueError` still works for users |
 | 2026-09-26 | Name `alphafade` is free on PyPI and TestPyPI (checked 2026-09-26) | Needed before building |
+| 2026-09-26 | **M0 approved.** Jeevun accepted all 7 recommendations and all API changes, and asked for M1–M6 to be built straight through | Jeevun's reply |
+| 2026-09-26 | Q1: comomentum defaults to leave-one-out, with `method="pairwise"` also available | Faithful to Lou & Polk |
+| 2026-09-26 | Q2: `requires-python >= 3.11`, CI on 3.11–3.14 | 3.10 reaches end-of-life 2026-10-31 |
+| 2026-09-26 | Q3: runtime deps are numpy, pandas, scipy only. statsmodels is a dev-only oracle. Downloads use stdlib urllib, so there's no `[data]` extra | Smaller install, clean mypy --strict |
+| 2026-09-26 | Q4: `analyze` reports a crowding link (Newey-West regression of forward strategy return on crowding) | Answers the mission's "why" |
+| 2026-09-26 | Q5: UMD example uses Jegadeesh & Titman (1993): sample end 1989-12-31, published 1993-03-01 | UMD is momentum |
+| 2026-09-26 | Q6: public GitHub repo JSand15/alphafade, built in this folder | Jeevun approved |
+| 2026-09-26 | Q7: v0.1 docs are README + docstrings + docs/methodology.md, with no hosted docs site | Keep scope tight |
+| 2026-09-26 | Frequency bands (days between dates): D 1–5, W 5.5–10, M 25–35, Q 80–100, A 350–380. Out-of-band gaps may cover at most 5% of the time span | Count-based rules would let 5 years of monthly data hide inside 20 years of daily data; weighting by time catches it |
+| 2026-09-26 | Newey-West has no n/(n−k) small-sample correction | Matches statsmodels' default and the original Newey & West (1987) paper; verified to 1e-10 |
+| 2026-09-26 | Leading and trailing NaNs are trimmed silently; NaNs in the middle warn | Edge NaNs come from rolling warm-up and forward shifts and carry no information |
+| 2026-09-26 | `forward_returns` compounds by multiplying shifted (1 + r) terms, not by summing log returns | Summing logs turns a −100% return into −inf and then NaN in pandas' rolling sum |
+| 2026-09-26 | A constant window (max == min) gets NaN rolling Sharpe | pandas' streaming variance leaves float residue on constant windows, which would give a huge fake Sharpe |
+| 2026-09-26 | Tests fail on any unexpected AlphaFadeWarning (autouse fixture in tests/conftest.py) | Forces every lossy path to be tested deliberately. It's a fixture, not ini filterwarnings, so coverage still measures import-time lines |

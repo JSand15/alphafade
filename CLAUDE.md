@@ -22,5 +22,24 @@ calendar time, how fast (half-life), and whether that lines up with crowding (co
   appears.
 
 ## Commands
-To be filled in at M1 once pyproject.toml exists (planned: uv sync, uv run pytest, uv run ruff,
-uv run mypy).
+```zsh
+uv sync                                   # create .venv with dev tools (Python from .python-version)
+uv run pytest -q                          # full suite incl. doctests in src/
+uv run pytest tests/test_rolling.py::test_hand_computed_spearman_ic   # one test
+uv run pytest --cov --cov-report=term     # coverage
+uv run ruff format . && uv run ruff check .
+uv run mypy                               # --strict on src/alphafade (configured in pyproject)
+```
+
+## Architecture notes
+- Public API = exactly what `src/alphafade/__init__.py` exports. Private helpers live in `_*.py`.
+- All input coercion/validation goes through `_validate.py` (DatetimeIndex rules, frequency
+  inference, alignment, NaN trimming). Don't reimplement checks in feature modules.
+- Newey-West regression, lag rules, block bootstrap and RNG handling live in `_stats.py` and
+  are verified against statsmodels (a dev-only dependency; never import it from src/).
+- Rolling outputs carry `attrs["alphafade_window"]`; downstream code uses it to widen bootstrap
+  blocks and Newey-West lags for overlapping windows.
+- Every lossy step warns with `DataDroppedWarning`; tests treat unexpected alphafade warnings as
+  errors (autouse fixture in `tests/conftest.py`), so use `pytest.warns` when one is expected.
+- pandas 3 may store datetimes at non-ns resolution: convert through `_validate._as_ns`, never
+  `.asi8` directly.
