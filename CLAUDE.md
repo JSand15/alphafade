@@ -29,7 +29,12 @@ uv run pytest tests/test_rolling.py::test_hand_computed_spearman_ic   # one test
 uv run pytest --cov --cov-report=term     # coverage
 uv run ruff format . && uv run ruff check .
 uv run mypy                               # --strict on src/alphafade (configured in pyproject)
+uv run pytest -q -m network               # tests that download from Ken French (deselected by default)
+uv run python scripts/make_supwald_table.py   # regenerate src/alphafade/_supwald_table.py (seeded)
+uv run --extra plot python examples/umd_momentum.py   # end-to-end example on real data
+UV_PROJECT_ENVIRONMENT=.venvs/py3.11 uv run --python 3.11 pytest -q   # another Python version
 ```
+Releasing: see RELEASING.md (tag `vX.Y.Z` → TestPyPI → PyPI via trusted publishing).
 
 ## Architecture notes
 - Public API = exactly what `src/alphafade/__init__.py` exports. Private helpers live in `_*.py`.
@@ -41,5 +46,10 @@ uv run mypy                               # --strict on src/alphafade (configure
   blocks and Newey-West lags for overlapping windows.
 - Every lossy step warns with `DataDroppedWarning`; tests treat unexpected alphafade warnings as
   errors (autouse fixture in `tests/conftest.py`), so use `pytest.warns` when one is expected.
+- `analyze()` (report.py) only orchestrates: it calls the public functions and never
+  re-implements their math. `plotting.py` is imported lazily from `FadeReport.plot()`.
+- `datasets.py` is the only module allowed to touch the network (lazy `urllib` import).
+- README code is executed by `tests/test_readme.py`. If you change README examples, the
+  printed output shown in the README must still match exactly.
 - pandas 3 may store datetimes at non-ns resolution: convert through `_validate._as_ns`, never
   `.asi8` directly.

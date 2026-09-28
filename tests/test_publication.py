@@ -112,3 +112,13 @@ def test_daily_frequency_annualizes_with_252() -> None:
     assert gap.freq == "D"
     row = gap.table.loc["post_publication"]
     assert row["ann_mean"] == pytest.approx(row["mean"] * 252)
+
+
+def test_hac_lags_apply_to_period_tstats_and_rolling_floor() -> None:
+    r = mp_series(sd=0.03, seed=1)
+    a = af.publication_gap(r, sample_end=END, publication_date=PUB, hac_lags=0)
+    b = af.publication_gap(r, sample_end=END, publication_date=PUB, hac_lags=10)
+    assert a.table.loc["in_sample", "t_stat"] != b.table.loc["in_sample", "t_stat"]
+    rolled = af.rolling_sharpe(r, window=24)
+    gap = af.publication_gap(rolled, sample_end=END, publication_date=PUB)
+    assert gap.hac_lags >= 23

@@ -12,7 +12,7 @@ and every decision that refines or overrides the spec, with its reason.
 | M2 fit_decay (bootstrap CI, linear fallback) | Done 2026-09-27: 80 passed, decay.py 99% coverage |
 | M3 find_break, chow_test, publication_gap (Newey-West) | Done 2026-09-27: 158 passed, breaks/publication 99% coverage |
 | M4 crowding_score | Done 2026-09-27: 171 passed, crowding.py 97% coverage |
-| M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | In progress: datasets.py done (subagent, reviewed, 100% coverage) |
+| M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | Done 2026-09-27: 186 passed, 99% total coverage |
 | M6 CI, packaging, TestPyPI release | Not started |
 
 **Next action:** see the first milestone in the table that isn't Done. Jeevun asked (2026-09-26)
@@ -69,7 +69,7 @@ and "no detectable decay" is a valid, reported answer.
    or returns, not a rolling average. Rolling windows overlap, which fakes smoothness,
    inflates R², and shrinks confidence intervals. Rolling series are still accepted, but
    they carry their window length in `.attrs`, and `fit_decay` then widens its bootstrap
-   blocks and warns.
+   blocks and adds a note to `DecayFit.notes` (not a warning, since nothing is lost).
 3. **Rename `test_break_at` to `chow_test`.** pytest collects any imported function whose name
    starts with `test_`, so `from alphafade import test_break_at` inside a user's test file
    would be run as a test.
@@ -118,6 +118,11 @@ docs/methodology.md       the math, assumptions, and citations
 ```
 
 ### Public API (everything else is private)
+
+> Superseded in detail by the code: this M0 sketch uses early field names (e.g.
+> `decay_rate_per_year`, `decline_pct`). The authoritative names are in the README API table
+> and the dataclass docstrings.
+
 ```python
 import alphafade as af
 
@@ -238,13 +243,19 @@ Sharpe unchanged by scaling).
 | 2026-09-26 | `forward_returns` compounds by multiplying shifted (1 + r) terms, not by summing log returns | Summing logs turns a −100% return into −inf and then NaN in pandas' rolling sum |
 | 2026-09-26 | A constant window (max == min) gets NaN rolling Sharpe | pandas' streaming variance leaves float residue on constant windows, which would give a huge fake Sharpe |
 | 2026-09-27 | Linear-fallback decay is only claimed if the fitted starting level has a Newey-West \|t\| ≥ 2 | The linear rate is relative to the starting level; a line rising from ~0 would otherwise be misread as "a negative edge shrinking" |
-| 2026-09-27 | Decay p-value = share of bootstrap rates ≤ 0 (one-sided); detection = whole (1−alpha) CI for the rate above 0 | Simple and honest; "no detectable decay" whenever the CI includes 0 |
+| 2026-09-27 | Decay p-value = share of bootstrap rates ≤ 0 (one-sided); detection = point estimate > 0 and whole (1−alpha) CI for the rate above 0 | Simple and honest; "no detectable decay" whenever the CI includes 0 |
 | 2026-09-27 | sup-Wald p-values come from a seeded simulation (`scripts/make_supwald_table.py`: 100k reps, 5000 steps). For trim 0.15, cv = 7.20/8.76/12.28, between Andrews 1993 (7.17/8.85/12.35) and later corrected tables (7.12/8.68/12.16). Trims offered: 0.05–0.25. p-values below 0.0005 are floored | statsmodels has no sup-F; a shipped table avoids runtime simulation |
-| 2026-09-27 | sup-Wald uses one Newey-West long-run variance from the whole demeaned series; the date is the least-squares break date | Simulated size at n=240 iid: 9.3% (per-date sandwich) vs 5.0% (this). Power loss is small (1σ shift: 100% either way; 0.3σ: 38% vs 51%) |
+| 2026-09-27 | sup-Wald uses one Newey-West long-run variance from the whole demeaned series; the date is the least-squares break date | Simulated size at n=240 iid: 9.3% (per-date sandwich) vs 5.0% (this). Cost: slightly less power (1σ shift: 100% for both; 0.3σ shift: about 38–40% with this method vs about 51–54% per-date) |
 | 2026-09-27 | CUSUM is scaled by a Newey-West long-run sd; with hac_lags=0 it equals statsmodels `breaks_cusumolsresid(ddof=0)` exactly | Robust to autocorrelation, but still verifiable |
 | 2026-09-27 | publication_gap periods: in-sample ≤ sample_end < post-sample < publication_date ≤ post-publication. Declines are NaN if the in-sample mean ≤ 0 | Mirrors McLean & Pontiff; a % decline of a non-positive mean is meaningless |
 | 2026-09-27 | crowding_score: membership = boolean DataFrames (formation dates × stocks); window = last `window` return rows ≤ formation date; stocks need ≥ min_obs returns; each stock is regressed on [1, factors] over its own non-missing rows; "RF" column subtracted, not regressed on | No look-ahead; handles monthly formation with weekly returns; faithful to Lou & Polk |
 | 2026-09-27 | Ken French loader built by a subagent, reviewed. Stdlib urllib, atomic cache writes, `path=` offline mode, CRLF-safe parsing that stops at the first blank line, month-end dates for monthly data, ns resolution. `DownloadError` moved to `_errors.py` and exported | Spec: no network at import, cache in ~/.cache/alphafade |
+| 2026-09-27 | `analyze` fits decay on raw returns (and raw per-date IC when a signal is given), runs sup-Wald on raw returns, runs publication_gap if both dates are given (or chow_test if only publication_date), and computes the crowding link when crowding is passed. Default rolling window = 3 years of periods | Raw per-period series avoid the overlap problem; 3 years is a common convention |
+| 2026-09-27 | Crowding link = Newey-West regression of the compounded next-`horizon` return (default 1 year) on standardized crowding, lags ≥ horizon − 1 | Future windows overlap, so lags must cover the overlap |
+| 2026-09-27 | README code blocks are executed by tests/test_readme.py; the signal example's printed output must match the README exactly | Spec: the quickstart must run exactly as written |
+| 2026-09-27 | ruff format excludes *.md | ruff 0.16 formats code inside Markdown and would flatten the aligned README comments |
+| 2026-09-27 | Release: tag v* → tests → build → TestPyPI → install back from TestPyPI (deps from PyPI, alphafade --no-deps) → PyPI. Trusted publishing with environments `testpypi` / `pypi` | Spec definition of done; --no-deps blocks dependency confusion from TestPyPI |
+| 2026-09-27 | publication_gap: rolling inputs get ≥ window−1 lags, and a user's `hac_lags` also applies to the per-period t-stats (capped at the period length − 1) | Consistency with find_break/chow_test; found by the methodology-docs agent's code-vs-docs check |
 | 2026-09-26 | Tests fail on any unexpected AlphaFadeWarning (autouse fixture in tests/conftest.py) | Forces every lossy path to be tested deliberately. It's a fixture, not ini filterwarnings, so coverage still measures import-time lines |
 
 ## M2 notes

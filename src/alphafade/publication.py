@@ -19,6 +19,7 @@ from ._validate import (
     resolve_freq,
     to_array,
 )
+from .rolling import WINDOW_ATTR
 
 __all__ = ["GapResult", "publication_gap"]
 
@@ -146,7 +147,9 @@ def publication_gap(
     freq : str, optional
         'D', 'W', 'M', 'Q' or 'A' for annualizing. Inferred if omitted.
     hac_lags : int, optional
-        Newey-West lags. Default: floor(4 * (n/100)^(2/9)).
+        Newey-West lags, used for the regression and each period's t-stat (capped at the
+        period length minus 1). Default: floor(4 * (n/100)^(2/9)) for the sample in
+        question, and at least window - 1 for a rolling series.
 
     Returns
     -------
@@ -170,6 +173,7 @@ def publication_gap(
         raise InputError(
             f"publication_date ({pub:%Y-%m-%d}) must be after sample_end ({end:%Y-%m-%d})."
         )
+    window = series.attrs.get(WINDOW_ATTR)
     y_s = dropna_series(series, "returns")
     f = resolve_freq(pd.DatetimeIndex(y_s.index), freq, "returns")
     if sample_start is not None:
@@ -199,7 +203,9 @@ def publication_gap(
             f"{idx[-1]:%Y-%m-%d}."
         )
     y = to_array(y_s)
-    lags = resolve_hac_lags(hac_lags, n)
+    # Overlapping (rolling) inputs need at least window - 1 lags, as in find_break.
+    min_lags = int(window) - 1 if isinstance(window, (int, np.integer)) and window > 1 else 0
+    lags = resolve_hac_lags(hac_lags, n, min_lags=min(min_lags, n - 1))
     ppy = PERIODS_PER_YEAR[f]
 
     present = [p for p in (1, 2) if (period == p).any()]
@@ -238,7 +244,15 @@ def publication_gap(
             continue
         mean = float(yp.mean())
         sd = float(yp.std(ddof=1)) if len(yp) > 1 else math.nan
-        t_stat = hac_mean(yp, resolve_hac_lags(None, len(yp)))[2] if len(yp) > 2 else math.nan
+        if len(yp) > 2:
+            period_lags = (
+                min(lags, len(yp) - 1)
+                if hac_lags is not None
+                else max(resolve_hac_lags(None, len(yp)), min(min_lags, len(yp) - 1))
+            )
+            t_stat = hac_mean(yp, period_lags)[2]
+        else:
+            t_stat = math.nan
         rows.append(
             {
                 "start": ip[0],

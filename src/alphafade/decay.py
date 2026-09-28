@@ -44,14 +44,16 @@ class DecayFit:
         Model behind the headline numbers. Exponential unless its fit failed, in which case
         alphafade fell back to linear and emitted a :class:`FitWarning`.
     decay_detected : bool
-        True when the whole confidence interval for the decay rate is above zero.
+        True when the point estimate and the whole confidence interval for the decay rate
+        are above zero (for the linear fallback, the starting level must also have a
+        Newey-West |t| of at least 2).
     half_life_years : float or None
         Years for the edge to halve. None when no decay is detected, because a huge
         half-life from an insignificant fit would be meaningless. For the linear model this
         is the time from the start until the fitted line reaches half its starting level.
     ci_low, ci_high : float or None
-        Confidence interval for the half-life. ``ci_high`` is ``inf`` when the interval for
-        the rate includes zero (the data can't rule out "no decay").
+        Confidence interval for the half-life, from the interval for the rate. Both are
+        None when no decay is detected.
     decay_rate : float
         Exponential: lambda in a * exp(-lambda * t), per year. Linear: the fall in the edge
         per year, as a share of the starting level. Positive means shrinking.
@@ -182,7 +184,8 @@ def fit_decay(
         Significance level; the confidence intervals cover 1 - alpha.
     block_size : int, optional
         Bootstrap block length in observations. Default: about 1.75 * n^(1/3), and never
-        shorter than the rolling window when ``perf`` is a rolling series.
+        shorter than the rolling window when ``perf`` is a rolling series. An explicit value
+        is used as given.
     rng : int, numpy Generator, or None
         Seed for reproducible confidence intervals. Pass an int.
 

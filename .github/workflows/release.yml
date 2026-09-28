@@ -1,0 +1,91 @@
+name: Release
+
+# Push a version tag to release, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+# The package is built once, published to TestPyPI, installed back from TestPyPI and
+# smoke-tested, and only then published to PyPI.
+#
+# Uses PyPI Trusted Publishing (OIDC): no API tokens are stored anywhere.
+# One-time setup (see RELEASING.md): on test.pypi.org and pypi.org add a "pending publisher"
+# with owner JSand15, repository alphafade, workflow release.yml, and environments
+# "testpypi" and "pypi" respectively.
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+      - name: Check the tag matches the package version
+        run: |
+          version=$(uv run --no-project python -c "import re,pathlib; print(re.search(r'__version__ = \"(.+?)\"', pathlib.Path('src/alphafade/__init__.py').read_text()).group(1))")
+          test "v${version}" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} != version v${version}"; exit 1; }
+      - name: Run the test suite
+        run: uv sync --locked --extra plot && uv run pytest -q
+      - name: Build
+        run: uv build
+      - name: Check metadata
+        run: uvx twine check --strict dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publish-testpypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/alphafade
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  verify-testpypi:
+    needs: publish-testpypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+      - name: Install from TestPyPI and smoke-test
+        # Dependencies come from real PyPI first; only alphafade itself is taken from
+        # TestPyPI (--no-deps), so a look-alike package on TestPyPI can't sneak in.
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          uv venv /tmp/check
+          uv pip install --python /tmp/check/bin/python numpy pandas scipy
+          for attempt in 1 2 3 4 5 6; do
+            uv pip install --python /tmp/check/bin/python --no-deps \
+              --index-url https://test.pypi.org/simple/ "alphafade==${version}" && break
+            echo "Not visible on TestPyPI yet; retrying in 20s"; sleep 20
+          done
+          /tmp/check/bin/python -c "import alphafade as af; assert af.__version__ == '${version}'; print('ok', af.__version__)"
+
+  publish-pypi:
+    needs: verify-testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/alphafade
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
