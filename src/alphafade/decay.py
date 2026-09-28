@@ -276,10 +276,12 @@ def fit_decay(
         notes.append("Exponential fit failed; using the linear trend instead.")
         model: Model = "linear"
         fitted = b0 + b1 * t
-        boot = _boot_linear(t, fitted, y - fitted, block, n_boot, rng_g)
-        sign = 1.0 if b0 >= 0 else -1.0
-        rate = -b1 * sign / abs(b0) if b0 != 0 else 0.0
-        rates = -boot * sign / abs(b0) if b0 != 0 else np.zeros_like(boot)
+        # The rate is -slope / starting level. Both are re-estimated on every bootstrap
+        # draw, so the interval reflects the uncertainty in the starting level too.
+        boot_b0, boot_b1 = _boot_linear(t, fitted, y - fitted, block, n_boot, rng_g)
+        rate = -b1 / b0 if b0 != 0 else 0.0
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rates = np.where(boot_b0 != 0, -boot_b1 / boot_b0, 0.0)
         initial = b0
         r2 = 1 - sse_lin / sst
     else:
@@ -479,11 +481,16 @@ def _boot_linear(
     block: int,
     n_boot: int,
     rng: np.random.Generator,
-) -> FloatArray:
+) -> tuple[FloatArray, FloatArray]:
+    """Bootstrap (intercept, slope) pairs of the linear trend."""
     tc = t - t.mean()
+    intercepts = np.empty(n_boot)
     slopes = np.empty(n_boot)
     for start in range(0, n_boot, _BOOT_CHUNK):
         size = min(_BOOT_CHUNK, n_boot - start)
         ys = _boot_samples(fitted, resid, block, size, rng)
-        slopes[start : start + size] = (ys - ys.mean(axis=1, keepdims=True)) @ tc / (tc @ tc)
-    return slopes
+        means = ys.mean(axis=1)
+        b1 = (ys - means[:, None]) @ tc / (tc @ tc)
+        slopes[start : start + size] = b1
+        intercepts[start : start + size] = means - b1 * t.mean()
+    return intercepts, slopes

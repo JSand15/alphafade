@@ -112,7 +112,9 @@ def ic_series(
     -----
     DataDroppedWarning
         If the inputs only partly overlap, or some dates had data but too few assets (or a
-        constant signal) to compute an IC.
+        constant signal) to compute an IC. Dates where no asset has both a signal and a
+        return (such as the last date after :func:`forward_returns`) are NaN without a
+        warning here; :func:`fit_decay` warns if such gaps fall in the middle of the sample.
 
     Notes
     -----

@@ -438,3 +438,26 @@ def test_real_monthly_ff3_download(tmp_path: Path) -> None:
     # Decimals, not percents: monthly market excess returns stay well inside +/-100%.
     assert ff3["Mkt-RF"].abs().max() < 1.0
     assert (tmp_path / "F-F_Research_Data_Factors_CSV.zip").is_file()
+
+
+def test_oversized_download_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(datasets, "_MAX_DOWNLOAD_BYTES", 100)
+    monkeypatch.setattr(
+        urllib.request, "urlopen", lambda request, timeout: io.BytesIO(b"x" * 1000)
+    )
+    with pytest.raises(DownloadError, match="refusing it"):
+        load_ff3("M", cache_dir=tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_zip_bomb_member_is_not_decompressed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(datasets, "_MAX_CSV_BYTES", 1000)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("bomb.csv", "0" * 100_000)  # compresses to almost nothing
+    bomb = tmp_path / "bomb.zip"
+    bomb.write_bytes(buf.getvalue())
+    with pytest.raises(InputError, match="refusing to decompress"):
+        load_ff3("M", path=bomb)

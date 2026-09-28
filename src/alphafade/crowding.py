@@ -235,7 +235,14 @@ def _membership(x: object, name: str) -> pd.DataFrame:
             f"{type(x).__name__}. For a fixed list of tickers use "
             "`pd.DataFrame(True, index=dates, columns=tickers)`."
         )
-    frame = x.fillna(False) if x.isna().to_numpy().any() else x
+    n_nan = int(x.isna().to_numpy().sum())
+    if n_nan:
+        warnings.warn(
+            f"{name} has {n_nan} missing value(s); they are treated as False (not a member).",
+            DataDroppedWarning,
+            stacklevel=3,
+        )
+    frame = x.fillna(False) if n_nan else x
     try:
         as_bool = frame.astype(bool)
     except (TypeError, ValueError):

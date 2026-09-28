@@ -187,8 +187,9 @@ If the best exponential rate lands on either end of the grid (decay faster, or g
 steeper, than the data can resolve) or $a$ is not finite, the exponential fit has failed.
 alphafade emits a `FitWarning`, adds a note, and uses the linear model for the headline:
 
-- The rate is the fall per year as a share of the starting level, $-b_1 / b_0$. The bootstrap
-  refits the slope and holds $b_0$ at its full-sample value.
+- The rate is the fall per year as a share of the starting level, $-b_1 / b_0$. Each bootstrap
+  draw refits both the intercept and the slope and uses $-b_1^* / b_0^*$, so the interval
+  includes the uncertainty in the starting level (a ratio estimator).
 - The linear "half-life" is the time until the line reaches half its starting level,
   $0.5 / (-b_1/b_0)$, with the interval built the same way.
 - **Starting-level rule:** decay is only claimed if $b_0$ has a Newey-West $|t| \ge 2$

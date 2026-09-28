@@ -183,5 +183,6 @@ def test_argument_validation(rng: np.random.Generator) -> None:
     nan_members = long_.astype(object)
     nan_members.iloc[0, 0] = np.nan
     # NaN membership counts as False.
-    crowd = af.crowding_score(rets, nan_members.astype(float), short_, min_stocks=3)
+    with pytest.warns(af.DataDroppedWarning, match="treated as False"):
+        crowd = af.crowding_score(rets, nan_members.astype(float), short_, min_stocks=3)
     assert crowd["n_long"].iloc[0] == 4

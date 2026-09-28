@@ -210,3 +210,16 @@ def test_too_short_or_constant_raises() -> None:
         af.fit_decay(decaying_ic(1, 0.01, 0))
     with pytest.raises(af.InputError, match="constant"):
         af.fit_decay(pd.Series(0.03, index=month_ends(60)))
+
+
+def test_linear_fallback_ci_accounts_for_starting_level_uncertainty() -> None:
+    # Regression test for the review finding: bootstrap rates must vary the intercept too.
+    from alphafade.decay import _boot_linear
+
+    t = np.arange(120) / 12
+    fitted = 1.0 - 0.05 * t
+    resid = np.random.default_rng(0).normal(0, 0.3, 120)
+    b0, b1 = _boot_linear(t, fitted, resid, 5, 400, np.random.default_rng(1))
+    assert b0.std() > 0.01
+    # Each (b0*, b1*) pair is the OLS fit of its own bootstrap sample.
+    assert np.corrcoef(b0, b1)[0, 1] < -0.5  # intercept and slope co-vary, as in OLS

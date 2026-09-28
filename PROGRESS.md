@@ -13,10 +13,12 @@ and every decision that refines or overrides the spec, with its reason.
 | M3 find_break, chow_test, publication_gap (Newey-West) | Done 2026-09-27: 158 passed, breaks/publication 99% coverage |
 | M4 crowding_score | Done 2026-09-27: 171 passed, crowding.py 97% coverage |
 | M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | Done 2026-09-27: 186 passed, 99% total coverage |
-| M6 CI, packaging, TestPyPI release | Not started |
+| M6 CI, packaging, TestPyPI release | Done except the release itself: CI green on GitHub (10 jobs); the release workflow is ready and waits on Jeevun's one-time trusted-publisher setup (RELEASING.md) |
 
-**Next action:** see the first milestone in the table that isn't Done. Jeevun asked (2026-09-26)
-for M1–M6 to be built straight through without stopping for approval between milestones.
+**Next action:** Jeevun does the one-time PyPI/TestPyPI trusted-publisher setup in RELEASING.md,
+then pushes tag `v0.1.0` (`git tag v0.1.0 && git push origin v0.1.0`). Then watch the Release
+workflow: TestPyPI → verify install → PyPI. After release: confirm `pip install alphafade` from
+PyPI in a fresh macOS venv (the last definition-of-done item that needs the real index).
 
 ---
 
@@ -256,6 +258,7 @@ Sharpe unchanged by scaling).
 | 2026-09-27 | ruff format excludes *.md | ruff 0.16 formats code inside Markdown and would flatten the aligned README comments |
 | 2026-09-27 | Release: tag v* → tests → build → TestPyPI → install back from TestPyPI (deps from PyPI, alphafade --no-deps) → PyPI. Trusted publishing with environments `testpypi` / `pypi` | Spec definition of done; --no-deps blocks dependency confusion from TestPyPI |
 | 2026-09-27 | publication_gap: rolling inputs get ≥ window−1 lags, and a user's `hac_lags` also applies to the per-period t-stats (capped at the period length − 1) | Consistency with find_break/chow_test; found by the methodology-docs agent's code-vs-docs check |
+| 2026-09-28 | Independent review agents (correctness + security) before release. Fixed: NaN crowding membership now warns; linear-fallback bootstrap re-estimates intercept and slope per draw (rate = −b1*/b0*); download capped at 20 MB and zip members at 100 MB uncompressed; CI actions pinned to commit SHAs; top-level `permissions: contents: read`. Verdicts: security "safe to launch", correctness "ship it" after the fixes | Pre-release verification |
 | 2026-09-26 | Tests fail on any unexpected AlphaFadeWarning (autouse fixture in tests/conftest.py) | Forces every lossy path to be tested deliberately. It's a fixture, not ini filterwarnings, so coverage still measures import-time lines |
 
 ## M2 notes

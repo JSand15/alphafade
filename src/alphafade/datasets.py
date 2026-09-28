@@ -47,6 +47,10 @@ FF3_COLUMNS: Final = ("Mkt-RF", "SMB", "HML", "RF")
 _MOM_COLUMN: Final = "Mom"
 
 _TIMEOUT_SECONDS: Final = 30.0
+# French's largest file is a few MB. These caps stop a bad download or a tampered cache
+# file (e.g. a zip bomb) from exhausting memory.
+_MAX_DOWNLOAD_BYTES: Final = 20 * 1024 * 1024
+_MAX_CSV_BYTES: Final = 100 * 1024 * 1024
 _USER_AGENT: Final = "alphafade (+https://github.com/JSand15/alphafade)"
 # French marks missing observations with these codes (in percent, before dividing by 100).
 _MISSING_CODES: Final = (-99.99, -999.0)
@@ -269,7 +273,7 @@ def _download(url: str) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS) as response:
-            data: bytes = response.read()
+            data: bytes = response.read(_MAX_DOWNLOAD_BYTES + 1)
     except (OSError, http.client.HTTPException) as exc:
         reason = getattr(exc, "reason", None) or exc
         filename = url.rsplit("/", 1)[-1]
@@ -278,6 +282,12 @@ def _download(url: str) -> bytes:
             f"download the file in a browser and load it offline with "
             f"path='/path/to/{filename}'."
         ) from exc
+    if len(data) > _MAX_DOWNLOAD_BYTES:
+        raise DownloadError(
+            f"The download from {url} is larger than {_MAX_DOWNLOAD_BYTES // 2**20} MB, far "
+            "bigger than any Ken French file; refusing it. The server may be returning "
+            "unexpected content."
+        )
     return data
 
 
@@ -318,6 +328,13 @@ def _extract_text(raw: bytes, source: str, *, expect_zip: bool) -> str:
                     raise InputError(
                         f"{source} should contain exactly one .csv file, found "
                         f"{len(members)} ({archive.namelist()})."
+                    )
+                size = archive.getinfo(members[0]).file_size
+                if size > _MAX_CSV_BYTES:
+                    raise InputError(
+                        f"{source} contains a {size:,}-byte CSV (over "
+                        f"{_MAX_CSV_BYTES // 2**20} MB uncompressed); refusing to decompress "
+                        "it. This isn't a Ken French file."
                     )
                 raw = archive.read(members[0])
         except (zipfile.BadZipFile, zlib.error, EOFError, OSError) as exc:
