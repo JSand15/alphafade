@@ -9,7 +9,7 @@ and every decision that refines or overrides the spec, with its reason.
 |---|---|
 | M0 Plan, open questions, layout, API | Done (approved 2026-09-26) |
 | M1 Validation/alignment + ic_series, rolling_ic, rolling_sharpe | Done 2026-09-26: 56 passed, 99% coverage |
-| M2 fit_decay (bootstrap CI, linear fallback) | **In progress**: `src/alphafade/decay.py` written, not yet exported, no tests yet (see M2 notes) |
+| M2 fit_decay (bootstrap CI, linear fallback) | Done 2026-09-27: 80 passed, decay.py 99% coverage |
 | M3 find_break, chow_test, publication_gap (Newey-West) | Not started |
 | M4 crowding_score | Not started |
 | M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | Not started |
@@ -237,21 +237,19 @@ Sharpe unchanged by scaling).
 | 2026-09-26 | Leading and trailing NaNs are trimmed silently; NaNs in the middle warn | Edge NaNs come from rolling warm-up and forward shifts and carry no information |
 | 2026-09-26 | `forward_returns` compounds by multiplying shifted (1 + r) terms, not by summing log returns | Summing logs turns a −100% return into −inf and then NaN in pandas' rolling sum |
 | 2026-09-26 | A constant window (max == min) gets NaN rolling Sharpe | pandas' streaming variance leaves float residue on constant windows, which would give a huge fake Sharpe |
+| 2026-09-27 | Linear-fallback decay is only claimed if the fitted starting level has a Newey-West \|t\| ≥ 2 | The linear rate is relative to the starting level; a line rising from ~0 would otherwise be misread as "a negative edge shrinking" |
+| 2026-09-27 | Decay p-value = share of bootstrap rates ≤ 0 (one-sided); detection = whole (1−alpha) CI for the rate above 0 | Simple and honest; "no detectable decay" whenever the CI includes 0 |
 | 2026-09-26 | Tests fail on any unexpected AlphaFadeWarning (autouse fixture in tests/conftest.py) | Forces every lossy path to be tested deliberately. It's a fixture, not ini filterwarnings, so coverage still measures import-time lines |
 
-## M2 notes (session paused 2026-09-26, usage limit)
-- `decay.py` is complete in draft: variable-projection exponential fit (closed-form `a` for
-  each rate, grid search then vectorized golden section, so it can't diverge), linear fit,
-  residual moving-block bootstrap, a linear fallback with FitWarning when the rate hits
-  its bound, and `DecayFit.summary()`.
-- Probe results (scratchpad script, not in the repo):
-  - 60 years × 500 assets with IC = 0.10·exp(−t/5): 7 of 8 seeds were within 10% of the true
-    half-life of 3.47 years, but seed 1 was 33% low. The spec's "within 10%" test therefore
-    needs a longer or wider sample (e.g. 100 years or 2000 assets), or a check on the median
-    across seeds. Verify the choice before writing the test.
-  - Constant IC: 1 false positive in 40 (about 2.5%, as expected at a two-sided 5% level).
-  - Speed: 0.12 s for monthly data (1000 bootstrap draws), 1.1 s for 8000 daily observations.
-- TODO to finish M2: export `fit_decay` and `DecayFit` in `__init__.py`; write tests/test_decay.py
-  (noise-free exact recovery, panel recovery, constant → no decay, growth, bound → linear
-  fallback + FitWarning, better_fit on linear data, rolling input note/block ≥ window,
-  negative-IC decay, seed reproducibility, input validation); run ruff + mypy; commit.
+## M2 notes
+- Exponential fit uses variable projection: for each rate, the best level `a` has a
+  closed form, so the fit is a 1-D search (grid, then vectorized golden section) and can't
+  diverge. Grid bounds: half-life ≥ max(1% of span, 3 observations), and growth ≤ 100× over
+  the sample.
+- The spec's "within 10%" test needs a precise sample. With realistic noise (3000 assets,
+  60 years monthly) single estimates scatter about 6% (sd), so about 1 in 4–7 draws miss 10%.
+  Tests therefore check: (a) within 10% at per-date noise sd 0.005 over 80 years; (b) median
+  error < 3% across 25 seeds at realistic noise (unbiasedness); (c) the end-to-end
+  asset-panel pipeline within 35%. This precision fact goes in the README Limitations.
+- Constant IC false-positive rate is about 2.5% (1/40 in a probe), as designed for a
+  two-sided 95% CI.

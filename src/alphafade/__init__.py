@@ -17,6 +17,7 @@ from ._errors import (
     InputError,
     InsufficientDataError,
 )
+from .decay import DecayFit, fit_decay
 from .rolling import forward_returns, ic_series, rolling_ic, rolling_sharpe
 
 __version__ = "0.1.0"
@@ -26,11 +27,13 @@ __all__ = [
     "AlphaFadeError",
     "AlphaFadeWarning",
     "DataDroppedWarning",
+    "DecayFit",
     "FitWarning",
     "FrequencyError",
     "InputError",
     "InsufficientDataError",
     "__version__",
+    "fit_decay",
     "forward_returns",
     "ic_series",
     "rolling_ic",

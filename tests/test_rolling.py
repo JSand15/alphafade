@@ -229,7 +229,9 @@ def test_ic_bounded_and_monotone_invariant(s_arr: np.ndarray, f_arr: np.ndarray)
     arrays(
         np.float64,
         st.integers(30, 80),
-        elements=st.floats(-0.2, 0.2, allow_nan=False, allow_subnormal=False),
+        # Realistic magnitudes: pandas' streaming rolling sums keep ~1e-17 residue, which
+        # only matters for returns on the order of machine epsilon.
+        elements=st.floats(-0.2, 0.2, allow_nan=False).filter(lambda x: x == 0 or abs(x) > 1e-8),
     ),
     st.floats(0.1, 10),
 )

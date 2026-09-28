@@ -16,6 +16,8 @@ from ._stats import (
     RngLike,
     block_bootstrap_indices,
     default_block_size,
+    ols_hac,
+    resolve_hac_lags,
     resolve_rng,
 )
 from ._validate import as_series, dropna_series, years_since_start
@@ -111,8 +113,10 @@ class DecayFit:
         span = f"{self.start:%Y-%m} to {self.end:%Y-%m}"
         lines = [f"{self.model.capitalize()} decay fit on {self.n_obs} observations ({span})."]
         if self.decay_detected and self.half_life_years is not None:
-            hi = "infinity" if self.ci_high is None or math.isinf(self.ci_high) else (
-                f"{self.ci_high:.1f}"
+            hi = (
+                "infinity"
+                if self.ci_high is None or math.isinf(self.ci_high)
+                else (f"{self.ci_high:.1f}")
             )
             lo = f"{self.ci_low:.1f}" if self.ci_low is not None else "?"
             if self.model == "exponential":
@@ -217,11 +221,11 @@ def fit_decay(
         raise InputError(f"n_boot must be an integer of at least 100, got {n_boot!r}.")
     if not 0 < alpha < 0.5:
         raise InputError(f"alpha must be between 0 and 0.5, got {alpha!r}.")
-    y = y_s.to_numpy(dtype=np.float64)
+    y: FloatArray = np.asarray(y_s.to_numpy(), dtype=np.float64)
     t = years_since_start(pd.DatetimeIndex(y_s.index))
     span = float(t[-1])
     sst = float(((y - y.mean()) ** 2).sum())
-    if sst <= 1e-300:
+    if np.ptp(y) == 0:
         raise InputError("perf is constant, so there is no decay (or anything else) to fit.")
 
     notes: list[str] = []
@@ -287,12 +291,27 @@ def fit_decay(
     rate_ci = (float(lo_q), float(hi_q))
     p_value = float(np.mean(rates <= 0))
     detected = bool(rate_ci[0] > 0 and rate > 0)
+    if detected and model == "linear":
+        # The linear rate is relative to the starting level, which only means something if
+        # that level is clearly nonzero (otherwise a line rising from ~0 would count as a
+        # "negative edge shrinking").
+        x = np.column_stack([np.ones(n), t])
+        start_t = float(
+            ols_hac(y, x, resolve_hac_lags(None, n, min_lags=min_block - 1)).tvalues[0]
+        )
+        if abs(start_t) < 2:
+            detected = False
+            notes.append(
+                "The fitted starting level isn't distinguishable from zero, so a decay rate "
+                "relative to it isn't meaningful."
+            )
+    half: float | None = None
+    ci_low: float | None = None
+    ci_high: float | None = None
     if detected:
         half = math.log(2) / rate
         ci_low = math.log(2) / rate_ci[1]
         ci_high = math.log(2) / rate_ci[0]
-    else:
-        half = ci_low = ci_high = None
     if detected and model == "linear":
         # Linear "half-life": years until the line reaches half of its starting level.
         half = 0.5 / rate
