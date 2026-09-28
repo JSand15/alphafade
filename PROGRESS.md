@@ -10,7 +10,7 @@ and every decision that refines or overrides the spec, with its reason.
 | M0 Plan, open questions, layout, API | Done (approved 2026-09-26) |
 | M1 Validation/alignment + ic_series, rolling_ic, rolling_sharpe | Done 2026-09-26: 56 passed, 99% coverage |
 | M2 fit_decay (bootstrap CI, linear fallback) | Done 2026-09-27: 80 passed, decay.py 99% coverage |
-| M3 find_break, chow_test, publication_gap (Newey-West) | Not started |
+| M3 find_break, chow_test, publication_gap (Newey-West) | Done 2026-09-27: 158 passed, breaks/publication 99% coverage |
 | M4 crowding_score | Not started |
 | M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | Not started |
 | M6 CI, packaging, TestPyPI release | Not started |
@@ -239,6 +239,10 @@ Sharpe unchanged by scaling).
 | 2026-09-26 | A constant window (max == min) gets NaN rolling Sharpe | pandas' streaming variance leaves float residue on constant windows, which would give a huge fake Sharpe |
 | 2026-09-27 | Linear-fallback decay is only claimed if the fitted starting level has a Newey-West \|t\| ≥ 2 | The linear rate is relative to the starting level; a line rising from ~0 would otherwise be misread as "a negative edge shrinking" |
 | 2026-09-27 | Decay p-value = share of bootstrap rates ≤ 0 (one-sided); detection = whole (1−alpha) CI for the rate above 0 | Simple and honest; "no detectable decay" whenever the CI includes 0 |
+| 2026-09-27 | sup-Wald p-values come from a seeded simulation (`scripts/make_supwald_table.py`: 100k reps, 5000 steps). For trim 0.15, cv = 7.20/8.76/12.28, between Andrews 1993 (7.17/8.85/12.35) and later corrected tables (7.12/8.68/12.16). Trims offered: 0.05–0.25. p-values below 0.0005 are floored | statsmodels has no sup-F; a shipped table avoids runtime simulation |
+| 2026-09-27 | sup-Wald uses one Newey-West long-run variance from the whole demeaned series; the date is the least-squares break date | Simulated size at n=240 iid: 9.3% (per-date sandwich) vs 5.0% (this). Power loss is small (1σ shift: 100% either way; 0.3σ: 38% vs 51%) |
+| 2026-09-27 | CUSUM is scaled by a Newey-West long-run sd; with hac_lags=0 it equals statsmodels `breaks_cusumolsresid(ddof=0)` exactly | Robust to autocorrelation, but still verifiable |
+| 2026-09-27 | publication_gap periods: in-sample ≤ sample_end < post-sample < publication_date ≤ post-publication. Declines are NaN if the in-sample mean ≤ 0 | Mirrors McLean & Pontiff; a % decline of a non-positive mean is meaningless |
 | 2026-09-26 | Tests fail on any unexpected AlphaFadeWarning (autouse fixture in tests/conftest.py) | Forces every lossy path to be tested deliberately. It's a fixture, not ini filterwarnings, so coverage still measures import-time lines |
 
 ## M2 notes

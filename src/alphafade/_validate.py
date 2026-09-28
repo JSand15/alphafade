@@ -12,6 +12,7 @@ from typing import Final, Literal
 
 import numpy as np
 import pandas as pd
+from numpy.typing import NDArray
 
 from ._errors import (
     AlignmentError,
@@ -277,6 +278,11 @@ def align_panels(
             stacklevel=3,
         )
     return a.loc[dates, assets], b.loc[dates, assets]
+
+
+def to_array(x: pd.Series[float]) -> NDArray[np.float64]:
+    """Values of a float Series as a float64 numpy array."""
+    return np.asarray(x.to_numpy(), dtype=np.float64)
 
 
 def years_since_start(index: pd.DatetimeIndex) -> np.ndarray:

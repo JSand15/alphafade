@@ -17,7 +17,9 @@ from ._errors import (
     InputError,
     InsufficientDataError,
 )
+from .breaks import BreakResult, chow_test, find_break
 from .decay import DecayFit, fit_decay
+from .publication import GapResult, publication_gap
 from .rolling import forward_returns, ic_series, rolling_ic, rolling_sharpe
 
 __version__ = "0.1.0"
@@ -26,16 +28,21 @@ __all__ = [
     "AlignmentError",
     "AlphaFadeError",
     "AlphaFadeWarning",
+    "BreakResult",
     "DataDroppedWarning",
     "DecayFit",
     "FitWarning",
     "FrequencyError",
+    "GapResult",
     "InputError",
     "InsufficientDataError",
     "__version__",
+    "chow_test",
+    "find_break",
     "fit_decay",
     "forward_returns",
     "ic_series",
+    "publication_gap",
     "rolling_ic",
     "rolling_sharpe",
 ]
