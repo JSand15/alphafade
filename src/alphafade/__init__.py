@@ -7,17 +7,20 @@ lines up with crowding.
 
 from __future__ import annotations
 
+from . import datasets
 from ._errors import (
     AlignmentError,
     AlphaFadeError,
     AlphaFadeWarning,
     DataDroppedWarning,
+    DownloadError,
     FitWarning,
     FrequencyError,
     InputError,
     InsufficientDataError,
 )
 from .breaks import BreakResult, chow_test, find_break
+from .crowding import crowding_score
 from .decay import DecayFit, fit_decay
 from .publication import GapResult, publication_gap
 from .rolling import forward_returns, ic_series, rolling_ic, rolling_sharpe
@@ -31,6 +34,7 @@ __all__ = [
     "BreakResult",
     "DataDroppedWarning",
     "DecayFit",
+    "DownloadError",
     "FitWarning",
     "FrequencyError",
     "GapResult",
@@ -38,6 +42,8 @@ __all__ = [
     "InsufficientDataError",
     "__version__",
     "chow_test",
+    "crowding_score",
+    "datasets",
     "find_break",
     "fit_decay",
     "forward_returns",

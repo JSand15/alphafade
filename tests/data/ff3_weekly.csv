@@ -1,0 +1,12 @@
+This file was created using the 202608 CRSP database.
+The Tbill return is the weekly rate that, over four weeks, 
+compounds to 1-month TBill rate. The 1-month TBill rate data until 202405 are from Ibbotson Associates. Starting from 202406, the 1-month TBill rate is from ICE BofA US 1-Month Treasury Bill Index.
+
+,Mkt-RF,SMB,HML,RF
+19260702,    1.58,   -0.61,   -0.90,    0.06
+19260710,    0.37,   -0.85,    0.32,    0.06
+19260717,    0.98,    0.82,   -1.77,    0.06
+19260724,   -2.03,    0.06,   -0.14,    0.06
+19260731,    3.06,   -1.98,   -0.85,    0.06
+
+Copyright 2026 Eugene F. Fama and Kenneth R. French

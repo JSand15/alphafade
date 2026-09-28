@@ -11,8 +11,8 @@ and every decision that refines or overrides the spec, with its reason.
 | M1 Validation/alignment + ic_series, rolling_ic, rolling_sharpe | Done 2026-09-26: 56 passed, 99% coverage |
 | M2 fit_decay (bootstrap CI, linear fallback) | Done 2026-09-27: 80 passed, decay.py 99% coverage |
 | M3 find_break, chow_test, publication_gap (Newey-West) | Done 2026-09-27: 158 passed, breaks/publication 99% coverage |
-| M4 crowding_score | Not started |
-| M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | Not started |
+| M4 crowding_score | Done 2026-09-27: 171 passed, crowding.py 97% coverage |
+| M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | In progress: datasets.py done (subagent, reviewed, 100% coverage) |
 | M6 CI, packaging, TestPyPI release | Not started |
 
 **Next action:** see the first milestone in the table that isn't Done. Jeevun asked (2026-09-26)
@@ -243,6 +243,8 @@ Sharpe unchanged by scaling).
 | 2026-09-27 | sup-Wald uses one Newey-West long-run variance from the whole demeaned series; the date is the least-squares break date | Simulated size at n=240 iid: 9.3% (per-date sandwich) vs 5.0% (this). Power loss is small (1σ shift: 100% either way; 0.3σ: 38% vs 51%) |
 | 2026-09-27 | CUSUM is scaled by a Newey-West long-run sd; with hac_lags=0 it equals statsmodels `breaks_cusumolsresid(ddof=0)` exactly | Robust to autocorrelation, but still verifiable |
 | 2026-09-27 | publication_gap periods: in-sample ≤ sample_end < post-sample < publication_date ≤ post-publication. Declines are NaN if the in-sample mean ≤ 0 | Mirrors McLean & Pontiff; a % decline of a non-positive mean is meaningless |
+| 2026-09-27 | crowding_score: membership = boolean DataFrames (formation dates × stocks); window = last `window` return rows ≤ formation date; stocks need ≥ min_obs returns; each stock is regressed on [1, factors] over its own non-missing rows; "RF" column subtracted, not regressed on | No look-ahead; handles monthly formation with weekly returns; faithful to Lou & Polk |
+| 2026-09-27 | Ken French loader built by a subagent, reviewed. Stdlib urllib, atomic cache writes, `path=` offline mode, CRLF-safe parsing that stops at the first blank line, month-end dates for monthly data, ns resolution. `DownloadError` moved to `_errors.py` and exported | Spec: no network at import, cache in ~/.cache/alphafade |
 | 2026-09-26 | Tests fail on any unexpected AlphaFadeWarning (autouse fixture in tests/conftest.py) | Forces every lossy path to be tested deliberately. It's a fixture, not ini filterwarnings, so coverage still measures import-time lines |
 
 ## M2 notes

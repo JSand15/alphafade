@@ -12,6 +12,7 @@ __all__ = [
     "AlphaFadeError",
     "AlphaFadeWarning",
     "DataDroppedWarning",
+    "DownloadError",
     "FitWarning",
     "FrequencyError",
     "InputError",
@@ -37,6 +38,10 @@ class FrequencyError(InputError):
 
 class InsufficientDataError(InputError):
     """There are too few usable observations to compute the requested statistic."""
+
+
+class DownloadError(AlphaFadeError, OSError):
+    """A dataset couldn't be downloaded or saved to the local cache."""
 
 
 class AlphaFadeWarning(UserWarning):
