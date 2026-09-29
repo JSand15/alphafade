@@ -20,11 +20,15 @@ from ._errors import (
     InsufficientDataError,
 )
 from .breaks import BreakResult, chow_test, find_break
+from .compare import SignalComparison, compare_signals
 from .crowding import crowding_score
 from .decay import DecayFit, fit_decay
+from .horizon import HorizonResult, ic_by_horizon
+from .lifetime import LifetimeResult, signal_lifetime
 from .publication import GapResult, publication_gap
 from .report import CrowdingLink, FadeReport, analyze
 from .rolling import forward_returns, ic_series, rolling_ic, rolling_sharpe
+from .walkforward import WalkForwardResult, walk_forward_decay
 
 __version__ = "0.1.0"
 
@@ -41,18 +45,26 @@ __all__ = [
     "FitWarning",
     "FrequencyError",
     "GapResult",
+    "HorizonResult",
     "InputError",
     "InsufficientDataError",
+    "LifetimeResult",
+    "SignalComparison",
+    "WalkForwardResult",
     "__version__",
     "analyze",
     "chow_test",
+    "compare_signals",
     "crowding_score",
     "datasets",
     "find_break",
     "fit_decay",
     "forward_returns",
+    "ic_by_horizon",
     "ic_series",
     "publication_gap",
     "rolling_ic",
     "rolling_sharpe",
+    "signal_lifetime",
+    "walk_forward_decay",
 ]

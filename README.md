@@ -89,6 +89,55 @@ The exponential model fits better than the linear one (AIC 22.6 lower).
 The true half-life (3.5 years) is inside the interval. Across 12 random seeds of this
 setup the median estimate was 3.56 years and every interval contained the truth.
 
+### Beyond the basics
+
+Four more tools, each answering a question a half-life alone can't:
+
+- `signal_lifetime` turns a fit into "when does the edge reach a level I care about?"
+- `compare_signals` ranks many strategies at once and corrects the p-values for testing many
+  signals (otherwise some pure-noise signal will look like it is fading by luck).
+- `walk_forward_decay` refits at each date using only the data available then, so you can see
+  whether the half-life is stable or just a quirk of the full sample.
+- `ic_by_horizon` measures fading across the *forecast horizon* (how many periods ahead the
+  signal still predicts), which is a different question from fading across calendar time.
+
+```python
+import numpy as np, pandas as pd
+import alphafade as af
+
+rng = np.random.default_rng(1)
+dates = pd.date_range("1980-01-31", periods=480, freq="ME")
+years = np.arange(480) / 12
+fading = pd.Series(0.02 * np.exp(-years / 8) + rng.normal(0, 0.02, 480), index=dates)
+noise = pd.Series(rng.normal(0.003, 0.02, 480), index=dates)
+
+fit = af.fit_decay(fading, rng=0)
+life = af.signal_lifetime(fit, fraction=0.5)     # when is the edge down to half its start?
+print(life.summary())
+
+ranked = af.compare_signals(pd.DataFrame({"fading": fading, "noise": noise}), rng=0)
+print(ranked.table[["half_life_years", "p_adjusted", "decay_detected_adjusted"]].round(3))
+
+walk = af.walk_forward_decay(fading, min_obs=120, step=60, rng=0)
+print(walk.table[["n_obs", "decay_detected"]].tail(3))
+```
+
+```text
+The fitted exponential edge reaches 50% of its starting level about 3.6 years after the sample start (95% CI 2.3 to 5.7), around 1983-08. That has already happened. The interval holds the starting level fixed and only varies the decay rate.
+        half_life_years  p_adjusted  decay_detected_adjusted
+fading            3.554       0.000                     True
+noise               NaN       0.136                    False
+            n_obs  decay_detected
+2009-12-31    360            True
+2014-12-31    420            True
+2019-12-31    480            True
+```
+
+The true half-life here is 5.5 years and the interval contains it. Multiple-testing correction
+lowers, but cannot remove, the chance that pure noise is flagged: with other seeds this same
+setup occasionally flags the noise series too. `FadeReport.to_dict()` and `.to_json()` export
+a report's headline numbers as plain data.
+
 ## Public API
 
 | Function / class | What it does |
@@ -102,7 +151,11 @@ setup the median estimate was 3.56 years and every interval contained the truth.
 | `chow_test(returns, date)` → `BreakResult` | Did the average change at a date you chose in advance? |
 | `publication_gap(returns, sample_end, publication_date)` → `GapResult` | McLean & Pontiff split: in-sample / post-sample / post-publication means, Sharpe, % declines, Newey-West t-stats. |
 | `crowding_score(stock_returns, long_members, short_members, factors=...)` | Lou & Polk comomentum per leg (leave-one-out or pairwise residual correlation). |
-| `analyze(returns, ...)` → `FadeReport` | Everything above, with `.summary()`, `.verdict()`, `.to_frame()`, `.plot()`. |
+| `signal_lifetime(fit, floor=None, fraction=None)` → `LifetimeResult` | Years until a fitted edge falls to a level (or share of its start), with a CI and a calendar date. |
+| `compare_signals(perf)` → `SignalComparison` | Fit and rank many signals by decay speed, with Holm or Benjamini-Hochberg adjusted p-values. |
+| `walk_forward_decay(perf, min_obs=60, step=12)` → `WalkForwardResult` | Expanding-window refits with no look-ahead; shows whether the half-life is stable. |
+| `ic_by_horizon(signal, returns, horizons)` → `HorizonResult` | Mean IC (Newey-West t) per forecast horizon and the horizon half-life. |
+| `analyze(returns, ...)` → `FadeReport` | Everything above, with `.summary()`, `.verdict()`, `.to_frame()`, `.to_dict()`, `.to_json()`, `.plot()`. |
 | `datasets.load_ff3(freq)`, `datasets.load_momentum(freq)` | Ken French factors as decimals: explicit download, cached in `~/.cache/alphafade/`, or offline with `path=`. |
 
 Errors are specific and say how to fix the input: `InputError` (a `ValueError`),

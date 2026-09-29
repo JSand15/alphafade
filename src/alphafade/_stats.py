@@ -32,7 +32,11 @@ def default_hac_lags(n: int) -> int:
 
 
 def resolve_hac_lags(hac_lags: int | None, n: int, min_lags: int = 0) -> int:
-    """Validate a user lag choice or apply the default, never going below ``min_lags``."""
+    """Validate a user lag choice, or apply the default (never below ``min_lags``).
+
+    ``min_lags`` only floors the *default*. An explicit ``hac_lags`` is used as given, so the
+    caller stays in control (and owns the consequences of too few lags).
+    """
     if hac_lags is None:
         return max(default_hac_lags(n), min_lags)
     if isinstance(hac_lags, bool) or not isinstance(hac_lags, (int, np.integer)):

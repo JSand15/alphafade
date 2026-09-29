@@ -14,6 +14,7 @@ and every decision that refines or overrides the spec, with its reason.
 | M4 crowding_score | Done 2026-09-27: 171 passed, crowding.py 97% coverage |
 | M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | Done 2026-09-27: 186 passed, 99% total coverage |
 | M6 CI, packaging, TestPyPI release | Done except the release itself: CI green on GitHub (10 jobs); the release workflow is ready and waits on Jeevun's one-time trusted-publisher setup (RELEASING.md) |
+| M7 Five extra features (approved 2026-09-29) | Done 2026-09-29: `signal_lifetime`, `compare_signals`, `walk_forward_decay`, `ic_by_horizon`, `FadeReport.to_dict/to_json`; independent review found no math errors; 506+ tests on 3.11-3.14 and lowest deps |
 
 **Next action:** Jeevun does the one-time PyPI/TestPyPI trusted-publisher setup in RELEASING.md,
 then pushes tag `v0.1.0` (`git tag v0.1.0 && git push origin v0.1.0`). Then watch the Release
@@ -273,3 +274,14 @@ Sharpe unchanged by scaling).
   asset-panel pipeline within 35%. This precision fact goes in the README Limitations.
 - Constant IC false-positive rate is about 2.5% (1/40 in a probe), as designed for a
   two-sided 95% CI.
+
+
+## M7 decisions (2026-09-29)
+- Added five features at Jeevun's request (outside the original spec scope): `signal_lifetime`,
+  `compare_signals` (Holm/BH), `walk_forward_decay` (expanding windows, no look-ahead),
+  `ic_by_horizon` (forecast-horizon fade, not calendar fade), `FadeReport.to_dict/to_json`.
+  `to_frame()` already existed, so it was left as is.
+- `publication_gap` now reports NaN t-stats for sub-periods under 12 observations.
+- `analyze()` summary notes when the IC rolling window was capped below `window`.
+- `resolve_hac_lags`: `min_lags` floors only the default; an explicit `hac_lags` is used as given.
+- Use `uv run --locked` locally: plain `uv run` rewrites `uv.lock` and CI uses `--locked`.

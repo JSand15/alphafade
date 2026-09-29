@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -243,6 +244,67 @@ class FadeReport:
                 rows.append(("crowding_link", name, getattr(self.crowding_link, name)))
         return pd.DataFrame(rows, columns=["section", "metric", "value"])
 
+    def to_dict(self, *, include_series: bool = False) -> dict[str, Any]:
+        """Headline results as a nested, JSON-safe dictionary.
+
+        Only plain Python values appear: floats, ints, strings, bools, ``None``, lists and
+        dicts. Dates become ISO strings (``"2015-12-31"``); NaN and infinity become ``None``
+        (strict JSON has no way to write them); tuples become lists. Optional parts that were
+        not computed are ``None``.
+
+        Parameters
+        ----------
+        include_series : bool, default False
+            Also include the big time series (returns, rolling Sharpe, IC, crowding, fitted
+            curves, break-test path) as ``{iso_date: value}`` maps.
+
+        Examples
+        --------
+        >>> import numpy as np, pandas as pd
+        >>> idx = pd.date_range("2000-01-31", periods=120, freq="ME")
+        >>> r = pd.Series(np.random.default_rng(0).normal(0.01, 0.02, 120), index=idx)
+        >>> d = analyze(r, n_boot=100, rng=0).to_dict()
+        >>> d["freq"], d["n_obs"], d["start"]
+        ('M', 120, '2000-01-31')
+        """
+        r = self.returns
+        out: dict[str, Any] = {
+            "verdict": self.verdict(),
+            "freq": self.freq,
+            "window": self.window,
+            "n_obs": len(r),
+            "start": _jsonable(r.index[0]),
+            "end": _jsonable(r.index[-1]),
+            "publication_date": _jsonable(self.publication_date),
+            "sample_end": _jsonable(self.sample_end),
+            "mean_ic": _float_or_none(self.ic.mean()) if self.ic is not None else None,
+            "return_decay": _obj_to_dict(self.return_decay, include_series),
+            "ic_decay": _obj_to_dict(self.ic_decay, include_series),
+            "break_test": _obj_to_dict(self.break_test, include_series),
+            "publication": _obj_to_dict(self.publication, include_series),
+            "publication_test": _obj_to_dict(self.publication_test, include_series),
+            "crowding_link": _obj_to_dict(self.crowding_link, include_series),
+        }
+        if include_series:
+            out["series"] = {
+                name: _jsonable(s)
+                for name, s in (
+                    ("returns", self.returns),
+                    ("rolling_sharpe", self.rolling_sharpe),
+                    ("ic", self.ic),
+                    ("rolling_ic", self.rolling_ic),
+                    ("crowding", self.crowding),
+                )
+                if s is not None
+            }
+        return out
+
+    def to_json(self, *, indent: int | None = 2, include_series: bool = False) -> str:
+        """:meth:`to_dict` as a strict JSON string (no ``NaN`` or ``Infinity`` tokens)."""
+        return json.dumps(
+            self.to_dict(include_series=include_series), indent=indent, allow_nan=False
+        )
+
     def plot(self, figsize: tuple[float, float] | None = None) -> Figure:
         """Draw every panel on one matplotlib Figure (needs ``pip install 'alphafade[plot]'``)."""
         from .plotting import plot_report
@@ -251,6 +313,61 @@ class FadeReport:
 
 
 _FREQ_WORD = {"D": "daily", "W": "weekly", "M": "monthly", "Q": "quarterly", "A": "annual"}
+
+
+def _float_or_none(x: Any) -> float | None:
+    """Return a plain float, or None if the value is NaN or infinite."""
+    v = float(x)
+    return v if math.isfinite(v) else None
+
+
+def _jsonable(v: Any) -> Any:
+    """Convert numpy/pandas values to plain JSON-safe Python (NaN and inf become None)."""
+    if v is None or v is pd.NaT:
+        return None
+    if isinstance(v, (bool, np.bool_)):
+        return bool(v)
+    if isinstance(v, (int, np.integer)):
+        return int(v)
+    if isinstance(v, (float, np.floating)):
+        return _float_or_none(v)
+    if isinstance(v, str):
+        return v
+    if isinstance(v, (pd.Timestamp, np.datetime64)):
+        ts: Any = pd.Timestamp(v)
+        return None if ts is pd.NaT else ts.date().isoformat()
+    if isinstance(v, pd.Series):
+        return {_key(k): _jsonable(x) for k, x in v.items()}
+    if isinstance(v, pd.DataFrame):
+        return [
+            {str(c): _jsonable(x) for c, x in row.items()} for _, row in v.reset_index().iterrows()
+        ]
+    if isinstance(v, dict):
+        return {str(k): _jsonable(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple, np.ndarray)):
+        return [_jsonable(x) for x in v]
+    return str(v)
+
+
+def _key(k: Any) -> str:
+    return str(_jsonable(k)) if isinstance(k, (pd.Timestamp, np.datetime64)) else str(k)
+
+
+def _obj_to_dict(obj: Any, include_series: bool) -> dict[str, Any] | None:
+    """Turn a result dataclass into a dict using its fields, so new fields appear automatically.
+
+    Pandas Series are skipped unless ``include_series``; small DataFrames (tables) are kept.
+    """
+    if obj is None:
+        return None
+    assert is_dataclass(obj)
+    out: dict[str, Any] = {}
+    for f in fields(obj):
+        v = getattr(obj, f.name)
+        if isinstance(v, pd.Series) and not include_series:
+            continue
+        out[f.name] = _jsonable(v)
+    return out
 
 
 def _indent(text: str) -> str:

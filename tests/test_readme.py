@@ -42,3 +42,10 @@ def test_quickstart_runs_as_written() -> None:
     printed = run(PYTHON[0])
     assert "Verdict:" in printed
     assert "After publication" in printed
+
+
+def test_beyond_the_basics_example_runs_and_prints_what_readme_shows() -> None:
+    code = next(c for c in PYTHON if "signal_lifetime" in c)
+    printed = run(code)
+    shown = next(c for lang, c in BLOCKS if lang == "text" and "reaches 50%" in c)
+    assert printed.strip() == shown.strip()
