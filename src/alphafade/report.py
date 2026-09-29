@@ -409,7 +409,8 @@ def analyze(
     crowding_horizon : int, optional
         Periods ahead for the crowding link. Default: one year (12 months, 52 weeks, ...).
     window : int, optional
-        Rolling window in periods. Default: three years (36 months, 156 weeks, 756 days).
+        Rolling window in periods. Default: three years (36 months, 156 weeks, 756 days),
+        shortened to a third of the data when there is less than nine years of history.
     freq : str, optional
         'D', 'W', 'M', 'Q' or 'A'. Inferred if omitted.
     ic_method : {"spearman", "pearson"}, default "spearman"
@@ -445,7 +446,9 @@ def analyze(
     last = len(valid) - int(np.argmax(valid[::-1]))
     r = r_full.iloc[first:last]
     f = resolve_freq(pd.DatetimeIndex(r.index), freq, "returns")
-    win = _DEFAULT_WINDOW[f] if window is None else window
+    # Short history: shrink only the *default* three-year window so a report can still be made.
+    # An explicit window is never changed (it errors if it doesn't fit).
+    win = max(2, min(_DEFAULT_WINDOW[f], len(r) // 3)) if window is None else window
     win = check_window(win, len(r))
     gen = resolve_rng(rng)
 

@@ -276,3 +276,14 @@ def test_partial_overlap_warns_once() -> None:
     with pytest.warns(DataDroppedWarning, match="partly overlap") as rec:
         ic_by_horizon(sig.iloc[:70], ret, horizons=(1, 2, 3))
     assert sum("partly overlap" in str(w.message) for w in rec) == 1
+
+
+def test_explicit_hac_lags_below_overlap_floor_is_rejected() -> None:
+    rng = np.random.default_rng(0)
+    dates = pd.date_range("2000-01-31", periods=120, freq="ME")
+    signal = pd.DataFrame(rng.standard_normal((120, 30)), index=dates)
+    returns = pd.DataFrame(rng.standard_normal((120, 30)) * 0.05, index=dates)
+    with pytest.raises(InputError, match="too small"):
+        ic_by_horizon(signal, returns, horizons=(12,), hac_lags=0)
+    ok = ic_by_horizon(signal, returns, horizons=(12,), hac_lags=11)
+    assert ok.table.loc[12, "n_dates"] > 0

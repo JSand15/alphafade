@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import warnings
 
 import matplotlib
 import numpy as np
@@ -198,3 +199,15 @@ def test_summary_notes_capped_ic_window() -> None:
     assert rep.rolling_ic is not None
     assert rep.rolling_ic.attrs["alphafade_window"] == 20
     assert "IC rolling window is 20" in rep.summary()
+
+
+def test_short_daily_history_shrinks_default_window_but_not_explicit() -> None:
+    idx = pd.date_range("2020-01-01", periods=300, freq="B")  # ~14 months, default window 756
+    r = pd.Series(np.random.default_rng(0).normal(0.0005, 0.01, 300), index=idx)
+    with warnings.catch_warnings():
+        warnings.simplefilter("always", af.FitWarning)  # a 14-month fit may fall back to linear
+        rep = af.analyze(r, n_boot=100, rng=0)
+    assert rep.window == 100  # a third of the data
+    assert "Rolling window: 100 periods" in rep.summary()
+    with pytest.raises(af.InsufficientDataError, match="longer than the data"):
+        af.analyze(r, window=756, n_boot=100, rng=0)

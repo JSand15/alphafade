@@ -8,7 +8,7 @@ from typing import Literal, TypeVar
 import numpy as np
 import pandas as pd
 
-from ._errors import DataDroppedWarning, InputError
+from ._errors import DataDroppedWarning, InputError, InsufficientDataError
 from ._validate import (
     PERIODS_PER_YEAR,
     align_panels,
@@ -276,6 +276,11 @@ def rolling_sharpe(
     r = as_series(returns, "returns")
     f = resolve_freq(pd.DatetimeIndex(r.index), freq, "returns")
     window = check_window(window, len(r))
+    if r.notna().sum() < window:
+        raise InsufficientDataError(
+            f"returns has only {int(r.notna().sum())} non-missing values, fewer than the "
+            f"rolling window ({window}), so no Sharpe ratio can be computed."
+        )
     mp = window if min_periods is None else check_window(min_periods, window, "min_periods")
     if isinstance(rf, pd.Series):
         rf_s = as_series(rf, "rf")

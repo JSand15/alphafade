@@ -32,10 +32,12 @@ def default_hac_lags(n: int) -> int:
 
 
 def resolve_hac_lags(hac_lags: int | None, n: int, min_lags: int = 0) -> int:
-    """Validate a user lag choice, or apply the default (never below ``min_lags``).
+    """Validate a user lag choice, or apply the default; both are at least ``min_lags``.
 
-    ``min_lags`` only floors the *default*. An explicit ``hac_lags`` is used as given, so the
-    caller stays in control (and owns the consequences of too few lags).
+    ``min_lags`` is the fewest lags that keep overlapping windows honest (a series built from
+    rolling windows or multi-period returns has autocorrelation out to about ``window - 1``).
+    An explicit ``hac_lags`` below it is rejected: it would understate the standard errors and
+    make results look more significant than they are.
     """
     if hac_lags is None:
         return max(default_hac_lags(n), min_lags)
@@ -45,6 +47,13 @@ def resolve_hac_lags(hac_lags: int | None, n: int, min_lags: int = 0) -> int:
         raise InputError(f"hac_lags must be non-negative, got {hac_lags}.")
     if hac_lags >= n:
         raise InputError(f"hac_lags={hac_lags} must be smaller than the sample size ({n}).")
+    if hac_lags < min_lags:
+        raise InputError(
+            f"hac_lags={hac_lags} is too small: the data are overlapping (rolling windows or "
+            f"multi-period returns), which needs at least {min_lags} lags, otherwise the "
+            "t-statistics come out too confident. Use hac_lags=None for the default, or a "
+            f"value of {min_lags} or more."
+        )
     return int(hac_lags)
 
 

@@ -17,6 +17,7 @@ import http.client
 import io
 import os
 import tempfile
+import time
 import warnings
 import zipfile
 import zlib
@@ -47,6 +48,7 @@ FF3_COLUMNS: Final = ("Mkt-RF", "SMB", "HML", "RF")
 _MOM_COLUMN: Final = "Mom"
 
 _TIMEOUT_SECONDS: Final = 30.0
+_DEADLINE_SECONDS: Final = 120.0  # total budget for one download, however slowly it drips
 # French's largest file is a few MB. These caps stop a bad download or a tampered cache
 # file (e.g. a zip bomb) from exhausting memory.
 _MAX_DOWNLOAD_BYTES: Final = 20 * 1024 * 1024
@@ -268,12 +270,39 @@ def _cache_root(cache_dir: str | os.PathLike[str] | None) -> Path:
 def _download(url: str) -> bytes:
     """Fetch ``url`` and return its bytes (the only function that uses the network)."""
     # Imported here so `import alphafade` stays fast and never loads networking code.
+    import urllib.error
     import urllib.request
 
+    class _HttpsOnlyRedirects(urllib.request.HTTPRedirectHandler):
+        """Follow redirects only to https URLs (never downgrade to plain http)."""
+
+        def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+            if not newurl.lower().startswith("https://"):
+                raise urllib.error.HTTPError(
+                    req.full_url, code, f"refusing non-https redirect to {newurl}", headers, fp
+                )
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    opener = urllib.request.build_opener(_HttpsOnlyRedirects)
     request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+    deadline = time.monotonic() + _DEADLINE_SECONDS
     try:
-        with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS) as response:
-            data: bytes = response.read(_MAX_DOWNLOAD_BYTES + 1)
+        with opener.open(request, timeout=_TIMEOUT_SECONDS) as response:
+            pieces: list[bytes] = []
+            got = 0
+            # Read in chunks so one slow-dripping server can't hold us past the deadline.
+            while chunk := response.read(1 << 16):
+                got += len(chunk)
+                if got > _MAX_DOWNLOAD_BYTES:
+                    raise DownloadError(
+                        f"The download from {url} is larger than "
+                        f"{_MAX_DOWNLOAD_BYTES // 2**20} MB, far bigger than any Ken French "
+                        "file; refusing it. The server may be returning unexpected content."
+                    )
+                if time.monotonic() > deadline:
+                    raise TimeoutError(f"no complete download within {_DEADLINE_SECONDS} s")
+                pieces.append(chunk)
+            data = b"".join(pieces)
     except (OSError, http.client.HTTPException) as exc:
         reason = getattr(exc, "reason", None) or exc
         filename = url.rsplit("/", 1)[-1]
@@ -282,12 +311,6 @@ def _download(url: str) -> bytes:
             f"download the file in a browser and load it offline with "
             f"path='/path/to/{filename}'."
         ) from exc
-    if len(data) > _MAX_DOWNLOAD_BYTES:
-        raise DownloadError(
-            f"The download from {url} is larger than {_MAX_DOWNLOAD_BYTES // 2**20} MB, far "
-            "bigger than any Ken French file; refusing it. The server may be returning "
-            "unexpected content."
-        )
     return data
 
 
@@ -329,14 +352,21 @@ def _extract_text(raw: bytes, source: str, *, expect_zip: bool) -> str:
                         f"{source} should contain exactly one .csv file, found "
                         f"{len(members)} ({archive.namelist()})."
                     )
-                size = archive.getinfo(members[0]).file_size
-                if size > _MAX_CSV_BYTES:
-                    raise InputError(
-                        f"{source} contains a {size:,}-byte CSV (over "
-                        f"{_MAX_CSV_BYTES // 2**20} MB uncompressed); refusing to decompress "
-                        "it. This isn't a Ken French file."
-                    )
-                raw = archive.read(members[0])
+                # Never trust the size in the zip header (a forged one is how zip bombs work):
+                # decompress in chunks and stop as soon as the real output passes the cap.
+                chunks: list[bytes] = []
+                total = 0
+                with archive.open(members[0]) as member:
+                    while chunk := member.read(1 << 20):
+                        total += len(chunk)
+                        if total > _MAX_CSV_BYTES:
+                            raise InputError(
+                                f"{source} contains a CSV over {_MAX_CSV_BYTES // 2**20} MB "
+                                "uncompressed; refusing to decompress it. This isn't a Ken "
+                                "French file."
+                            )
+                        chunks.append(chunk)
+                raw = b"".join(chunks)
         except (zipfile.BadZipFile, zlib.error, EOFError, OSError) as exc:
             raise InputError(f"{source} is a damaged zip file: {exc}.") from None
     elif expect_zip:

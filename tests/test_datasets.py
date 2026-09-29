@@ -388,7 +388,7 @@ def test_download_failure_is_helpful(tmp_path: Path, monkeypatch: pytest.MonkeyP
     def offline(*args: object, **kwargs: object) -> object:
         raise urllib.error.URLError("nodename nor servname provided")
 
-    monkeypatch.setattr(urllib.request, "urlopen", offline)
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", offline)
     with pytest.raises(DownloadError, match="path=") as info:
         load_ff3("W", cache_dir=tmp_path)
     message = str(info.value)
@@ -403,13 +403,13 @@ def test_download_sends_request_with_timeout(
 ) -> None:
     seen: dict[str, object] = {}
 
-    def fake_urlopen(request: urllib.request.Request, timeout: float) -> io.BytesIO:
+    def fake_urlopen(self: object, request: urllib.request.Request, timeout: float) -> io.BytesIO:
         seen["url"] = request.full_url
         seen["timeout"] = timeout
         seen["agent"] = request.get_header("User-agent")
         return io.BytesIO(MOM_DAILY_ZIP.read_bytes())
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", fake_urlopen)
     umd = load_momentum("D", cache_dir=tmp_path)
     assert len(umd) == 5
     assert seen["url"] == datasets.BASE_URL + "F-F_Momentum_Factor_daily_CSV.zip"
@@ -443,7 +443,9 @@ def test_real_monthly_ff3_download(tmp_path: Path) -> None:
 def test_oversized_download_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(datasets, "_MAX_DOWNLOAD_BYTES", 100)
     monkeypatch.setattr(
-        urllib.request, "urlopen", lambda request, timeout: io.BytesIO(b"x" * 1000)
+        urllib.request.OpenerDirector,
+        "open",
+        lambda self, request, timeout: io.BytesIO(b"x" * 1000),
     )
     with pytest.raises(DownloadError, match="refusing it"):
         load_ff3("M", cache_dir=tmp_path)
@@ -461,3 +463,86 @@ def test_zip_bomb_member_is_not_decompressed(
     bomb.write_bytes(buf.getvalue())
     with pytest.raises(InputError, match="refusing to decompress"):
         load_ff3("M", path=bomb)
+
+
+# --- hardening: forged zip sizes, redirects, slow servers ----------------------------------
+
+
+def _zip_with_forged_size(real_bytes: int, claimed: int = 1024) -> bytes:
+    """A zip whose CSV really expands to ``real_bytes`` but whose headers claim ``claimed``."""
+    import struct
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("x.csv", b"0" * real_bytes)
+    raw = bytearray(buf.getvalue())
+    raw[22:26] = struct.pack("<I", claimed)  # local header: uncompressed size
+    central = raw.rfind(b"PK\x01\x02")
+    raw[central + 24 : central + 28] = struct.pack("<I", claimed)
+    return bytes(raw)
+
+
+@pytest.mark.parametrize("claimed", [1024, 300 * 2**20], ids=["forged-size", "honest-size"])
+def test_zip_bomb_is_stopped_early(claimed: int) -> None:
+    import tracemalloc
+
+    bomb = _zip_with_forged_size(300 * 2**20, claimed=claimed)
+    tracemalloc.start()
+    try:
+        with pytest.raises(InputError, match=r"refusing|damaged"):
+            datasets._extract_text(bomb, "bomb.zip", expect_zip=True)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak < 250 * 2**20  # stopped near the 100 MB cap, not after all 300 MB
+
+
+def _serve(handler: type) -> tuple[object, int]:
+    import http.server
+    import threading
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), handler)  # type: ignore[arg-type]
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, int(server.server_address[1])
+
+
+def test_redirect_to_plain_http_is_refused() -> None:
+    import http.server
+
+    class Redirect(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(302)
+            self.send_header("Location", "http://127.0.0.1:1/evil.zip")
+            self.end_headers()
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server, port = _serve(Redirect)
+    try:
+        with pytest.raises(DownloadError, match="non-https redirect"):
+            datasets._download(f"http://127.0.0.1:{port}/file.zip")
+    finally:
+        server.shutdown()  # type: ignore[attr-defined]
+
+
+def test_slow_download_hits_the_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = iter(range(0, 10_000, 60))  # every read "takes" 60 s
+    monkeypatch.setattr(datasets.time, "monotonic", lambda: float(next(clock)))
+
+    class Drip:
+        def __enter__(self) -> Drip:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def read(self, n: int) -> bytes:
+            return b"x"
+
+    monkeypatch.setattr(
+        urllib.request.OpenerDirector, "open", lambda self, request, timeout: Drip()
+    )
+    with pytest.raises(DownloadError, match="no complete download"):
+        datasets._download("https://example.invalid/file.zip")

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 import warnings as _warnings
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -255,11 +256,11 @@ def test_find_break_all_nan_raises() -> None:
         af.find_break(s)
 
 
-def test_rolling_sharpe_all_nan_returns_all_nan() -> None:
-    """rolling_sharpe on an all-NaN series produces all-NaN output (doesn't raise)."""
-    s = pd.Series([float("nan")] * 60, index=month_ends(60))
-    sr = af.rolling_sharpe(s, window=12)
-    assert sr.isna().all()
+def test_rolling_sharpe_all_nan_raises() -> None:
+    """An all-NaN series has nothing to compute; say so instead of returning all-NaN."""
+    idx = pd.date_range("2000-01-31", periods=60, freq="ME")
+    with pytest.raises(af.InsufficientDataError, match="non-missing"):
+        af.rolling_sharpe(pd.Series(np.nan, index=idx), window=12)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -530,3 +531,33 @@ def test_rolling_sharpe_carries_window_attr() -> None:
 
     assert sr.attrs.get(WINDOW_ATTR) == 24
     assert sr.name == "rolling_sharpe"
+
+
+# ---------------------------------------------------------------------------------------
+# Silent-garbage inputs that must be rejected up front
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda s: af.fit_decay(s, n_boot=100, rng=0),
+        lambda s: af.find_break(s),
+        lambda s: af.rolling_sharpe(s, window=12),
+        lambda s: af.analyze(s, n_boot=100, rng=0),
+    ],
+    ids=["fit_decay", "find_break", "rolling_sharpe", "analyze"],
+)
+def test_boolean_and_overflow_scale_series_are_rejected(call: Any) -> None:
+    idx = pd.date_range("2000-01-31", periods=120, freq="ME")
+    rng = np.random.default_rng(0)
+    with pytest.raises(af.InputError, match="True/False"):
+        call(pd.Series([True, False] * 60, index=idx))
+    with pytest.raises(af.InputError, match="overflow"):
+        call(pd.Series(1e300 * rng.normal(size=120), index=idx))
+
+
+def test_boolean_panel_is_rejected() -> None:
+    idx = pd.date_range("2000-01-31", periods=30, freq="ME")
+    flags = pd.DataFrame(np.random.default_rng(0).random((30, 10)) > 0.5, index=idx)
+    with pytest.raises(af.InputError, match="True/False"):
+        af.forward_returns(flags)

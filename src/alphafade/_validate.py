@@ -92,6 +92,25 @@ def _check_index(index: pd.Index, name: str) -> pd.DatetimeIndex:
     return index
 
 
+# Squaring values this big overflows float64 (max ~1.8e308), turning variances into inf.
+_MAX_ABS_VALUE = 1e100
+
+
+def _check_values(raw_dtypes: list[object], out: np.ndarray, name: str) -> None:
+    """Reject data that would silently produce nonsense: booleans and absurd magnitudes."""
+    if any(pd.api.types.is_bool_dtype(dt) for dt in raw_dtypes):  # type: ignore[arg-type]
+        raise InputError(
+            f"{name} holds True/False values, not returns. Convert it to numbers first "
+            "(e.g. a return series, not a yes/no flag)."
+        )
+    finite = out[np.isfinite(out)]
+    if finite.size and float(np.abs(finite).max()) > _MAX_ABS_VALUE:
+        raise InputError(
+            f"{name} contains values larger than {_MAX_ABS_VALUE:.0e}, which would overflow "
+            "the statistics. Check the units (returns are decimals like 0.05, not raw prices)."
+        )
+
+
 def as_series(x: object, name: str) -> pd.Series[float]:
     """Coerce ``x`` to a float Series with a validated DatetimeIndex."""
     if isinstance(x, pd.DataFrame):
@@ -110,6 +129,7 @@ def as_series(x: object, name: str) -> pd.Series[float]:
         raise InputError(f"{name} must contain numbers: {exc}") from None
     if np.isinf(out.to_numpy()).any():
         raise InputError(f"{name} contains infinite values. Replace or remove them first.")
+    _check_values([x.dtype], out.to_numpy(), name)
     return out
 
 
@@ -131,6 +151,7 @@ def as_panel(x: object, name: str) -> pd.DataFrame:
         raise InputError(f"{name} must contain only numbers: {exc}") from None
     if np.isinf(out.to_numpy()).any():
         raise InputError(f"{name} contains infinite values. Replace or remove them first.")
+    _check_values(list(x.dtypes), out.to_numpy(), name)
     return out
 
 

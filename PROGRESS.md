@@ -283,5 +283,18 @@ Sharpe unchanged by scaling).
   `to_frame()` already existed, so it was left as is.
 - `publication_gap` now reports NaN t-stats for sub-periods under 12 observations.
 - `analyze()` summary notes when the IC rolling window was capped below `window`.
-- `resolve_hac_lags`: `min_lags` floors only the default; an explicit `hac_lags` is used as given.
 - Use `uv run --locked` locally: plain `uv run` rewrites `uv.lock` and CI uses `--locked`.
+
+## Hardening pass (2026-09-29, ari-debug)
+- `resolve_hac_lags`: an explicit `hac_lags` below the overlap floor (rolling windows,
+  multi-period returns) is now an `InputError`; it used to silently overstate significance.
+- `datasets`: zip decompression is streamed and capped on real output (a forged zip-header
+  size no longer defeats the cap); redirects must stay on https; downloads have a 120 s total
+  deadline (the old per-read timeout allowed a slow-drip server to hang a call).
+- `_validate`: boolean data and values above 1e100 are rejected up front (they produced
+  non-finite results silently).
+- `rolling_sharpe` raises `InsufficientDataError` when fewer non-missing values than the window.
+- `analyze()`: the default rolling window shrinks to a third of the data on short history
+  (explicit windows are unchanged).
+- Verified by: 256-combination junk-input fuzz (0 raw exceptions), 60-dataset random pipeline
+  sweep (0 failures, strict JSON, CI contains estimate, seeded determinism).
