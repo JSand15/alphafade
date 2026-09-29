@@ -23,6 +23,7 @@ from .rolling import WINDOW_ATTR
 
 __all__ = ["GapResult", "publication_gap"]
 
+_MIN_T_OBS = 12  # fewest observations for which a per-period t-stat is reported
 PERIODS = ("in_sample", "post_sample", "post_publication")
 _LABELS = {
     "in_sample": "In-sample",
@@ -244,7 +245,8 @@ def publication_gap(
             continue
         mean = float(yp.mean())
         sd = float(yp.std(ddof=1)) if len(yp) > 1 else math.nan
-        if len(yp) > 2:
+        # Below 12 observations the HAC t-stat is not trustworthy; report NaN, not a big number.
+        if len(yp) >= _MIN_T_OBS:
             period_lags = (
                 min(lags, len(yp) - 1)
                 if hac_lags is not None

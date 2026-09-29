@@ -122,3 +122,12 @@ def test_hac_lags_apply_to_period_tstats_and_rolling_floor() -> None:
     rolled = af.rolling_sharpe(r, window=24)
     gap = af.publication_gap(rolled, sample_end=END, publication_date=PUB)
     assert gap.hac_lags >= 23
+
+
+def test_short_subperiod_t_stat_is_nan() -> None:
+    idx = pd.date_range("1990-01-31", "2010-12-31", freq="ME")
+    r = pd.Series(0.01 + 0.001 * np.random.default_rng(42).standard_normal(len(idx)), index=idx)
+    gap = af.publication_gap(r, sample_end="2000-12-31", publication_date="2001-04-30")
+    row = gap.table.loc["post_sample"]
+    assert row["n_obs"] == 3
+    assert np.isnan(row["t_stat"])

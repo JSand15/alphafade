@@ -182,3 +182,19 @@ def test_import_has_no_heavy_side_effects() -> None:
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "[]"
+
+
+def test_summary_notes_capped_ic_window() -> None:
+    rng = np.random.default_rng(0)
+    r = pd.Series(
+        rng.standard_normal(600) * 0.02 + 0.01,
+        index=pd.date_range("1970-01-31", periods=600, freq="ME"),
+    )
+    sub = r.index[580:]
+    sig = pd.DataFrame(rng.standard_normal((20, 10)), index=sub)
+    fwd = pd.DataFrame(rng.standard_normal((20, 10)) * 0.1, index=sub)
+    rep = af.analyze(r, signal=sig, fwd_returns=fwd, rng=0, n_boot=100)
+    assert rep.window == 36
+    assert rep.rolling_ic is not None
+    assert rep.rolling_ic.attrs["alphafade_window"] == 20
+    assert "IC rolling window is 20" in rep.summary()

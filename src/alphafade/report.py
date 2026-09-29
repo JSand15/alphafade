@@ -22,7 +22,7 @@ from ._validate import (
 from .breaks import BreakResult, chow_test, find_break
 from .decay import DecayFit, fit_decay
 from .publication import GapResult, publication_gap
-from .rolling import ICMethod, forward_returns, ic_series, rolling_ic, rolling_sharpe
+from .rolling import WINDOW_ATTR, ICMethod, forward_returns, ic_series, rolling_ic, rolling_sharpe
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
@@ -149,6 +149,15 @@ class FadeReport:
             )
         return text
 
+    def _ic_window_note(self) -> str:
+        """Say so when the IC window was capped below ``window`` by a short signal history."""
+        if self.rolling_ic is None:
+            return ""
+        used = self.rolling_ic.attrs.get(WINDOW_ATTR)
+        if used is None or used == self.window:
+            return ""
+        return f" (the IC rolling window is {used}, capped at the available IC dates)"
+
     def summary(self) -> str:
         """Plain-English report of every analysis that was run."""
         r = self.returns
@@ -162,7 +171,7 @@ class FadeReport:
             "",
             f"Data: {len(r)} {_FREQ_WORD[self.freq]} returns, {r.index[0]:%Y-%m-%d} to "
             f"{r.index[-1]:%Y-%m-%d}. Average {float(r.mean()) * ppy:.2%} a year, Sharpe "
-            f"{sharpe:.2f}. Rolling window: {self.window} periods.",
+            f"{sharpe:.2f}. Rolling window: {self.window} periods{self._ic_window_note()}.",
             "",
             "Decay of the average return",
             _indent(self.return_decay.summary()),
