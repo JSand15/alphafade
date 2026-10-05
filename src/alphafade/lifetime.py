@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 from pandas.errors import OutOfBoundsDatetime
 
@@ -104,7 +105,9 @@ class LifetimeResult:
 
 
 def _check_level(name: str, value: object) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, (bool, np.bool_)) or not isinstance(
+        value, (int, float, np.integer, np.floating)
+    ):
         raise InputError(f"{name} must be a number, got {value!r}.")
     out = float(value)
     if not math.isfinite(out):

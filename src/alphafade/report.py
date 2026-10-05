@@ -138,10 +138,9 @@ class FadeReport:
             and not math.isnan(self.publication.post_publication_decline)
             and abs(self.publication.post_publication_t) >= 2
         ):
-            text += (
-                f" Returns are {self.publication.post_publication_decline:.0%} lower after "
-                "publication."
-            )
+            decline = self.publication.post_publication_decline
+            word = "lower" if decline >= 0 else "higher"
+            text += f" Returns are {abs(decline):.0%} {word} after publication."
         if self.crowding_link is not None and abs(self.crowding_link.t_stat) >= 2:
             text += (
                 " Crowding has predicted weaker returns."

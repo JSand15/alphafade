@@ -226,7 +226,13 @@ def rolling_ic(
     ic = ic_series(signal, fwd_returns, method=method, min_assets=min_assets)
     resolve_freq(pd.DatetimeIndex(ic.index), freq, "signal")
     window = check_window(window, len(ic))
-    mp = window if min_periods is None else check_window(min_periods, window, "min_periods")
+    mp = window if min_periods is None else _check_min_periods(min_periods, window)
+    if ic.notna().sum() < mp:
+        raise InsufficientDataError(
+            f"Only {int(ic.notna().sum())} date(s) have a usable IC, fewer than the "
+            f"{mp} needed for one rolling value. Check that signal and fwd_returns overlap "
+            "and have at least min_assets assets with data on each date."
+        )
     out = ic.rolling(window, min_periods=mp).mean().rename("rolling_ic")
     out.attrs[WINDOW_ATTR] = window
     return out
@@ -281,7 +287,7 @@ def rolling_sharpe(
             f"returns has only {int(r.notna().sum())} non-missing values, fewer than the "
             f"rolling window ({window}), so no Sharpe ratio can be computed."
         )
-    mp = window if min_periods is None else check_window(min_periods, window, "min_periods")
+    mp = window if min_periods is None else _check_min_periods(min_periods, window)
     if isinstance(rf, pd.Series):
         rf_s = as_series(rf, "rf")
         missing = r.index.difference(rf_s.index)
@@ -290,17 +296,47 @@ def rolling_sharpe(
                 f"rf is missing {len(missing)} of the return dates (first: "
                 f"{missing[0]:%Y-%m-%d}). Pass an rf Series covering every return date."
             )
-        excess = r - rf_s.reindex(r.index)
-    else:
+        rf_aligned = rf_s.reindex(r.index)
+        gaps = int((rf_aligned.isna() & r.notna()).sum())
+        if gaps:
+            warnings.warn(
+                f"rf is NaN on {gaps} date(s) where returns exist; every window containing "
+                "them is NaN. Fill the risk-free rate (e.g. forward-fill) to keep them.",
+                DataDroppedWarning,
+                stacklevel=2,
+            )
+        excess = r - rf_aligned
+    elif isinstance(rf, (int, float, np.integer, np.floating)) and not isinstance(rf, bool):
+        if not np.isfinite(rf):
+            raise InputError(f"rf must be a finite number, got {rf!r}.")
         excess = r - float(rf)
+    else:
+        raise InputError(
+            "rf must be a number (a per-period risk-free rate, e.g. 0.0002) or a pandas "
+            f"Series on the return dates, got {type(rf).__name__}."
+        )
     roll = excess.rolling(window, min_periods=mp)
     mean = roll.mean()
     std = roll.std(ddof=1)
     # A window of identical returns has zero volatility, but pandas' streaming variance can
     # leave floating-point residue there, so detect constant windows exactly (max == min)
     # and return NaN instead of a huge meaningless ratio.
+    # Subtracting a varying rf leaves rounding residue (~1e-17) in an otherwise constant
+    # window, so "constant" means a spread that is negligible next to the values' size.
     spread = roll.max() - roll.min()
-    sharpe = (mean / std.where(spread > 0)) * np.sqrt(PERIODS_PER_YEAR[f])
+    scale = excess.abs().rolling(window, min_periods=mp).max()
+    sharpe = (mean / std.where(spread > 1e-12 * scale)) * np.sqrt(PERIODS_PER_YEAR[f])
     out: pd.Series[float] = sharpe.rename("rolling_sharpe")
     out.attrs[WINDOW_ATTR] = window
     return out
+
+
+def _check_min_periods(min_periods: int, window: int) -> int:
+    if isinstance(min_periods, bool) or not isinstance(min_periods, (int, np.integer)):
+        raise InputError(f"min_periods must be an integer, got {min_periods!r}.")
+    if not 2 <= min_periods <= window:
+        raise InputError(
+            f"min_periods={min_periods} is larger than the window ({window}) or below 2; "
+            f"use a value from 2 to {window}."
+        )
+    return int(min_periods)

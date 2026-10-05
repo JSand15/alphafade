@@ -83,8 +83,13 @@ class WalkForwardResult:
         ]
         if self.stable_since is not None:
             lines.append(f"Detection has held in every window since {self.stable_since:%Y-%m}.")
+        elif detected == 0:
+            lines.append("No window detected decay.")
         else:
-            lines.append("Decay is not detected in the latest window, or it has come and gone.")
+            lines.append(
+                "The latest (full-sample) window does not detect decay, so there is no "
+                "full-sample half-life to trust; the earlier detections did not last."
+            )
         if self.half_life_drift is not None:
             hl = self.table["half_life_years"].dropna()
             lines.append(
@@ -97,7 +102,7 @@ class WalkForwardResult:
                     "half-life should not be trusted: it depends heavily on the sample end "
                     "date, which suggests the decay is not a stable process."
                 )
-            else:
+            elif self.stable_since is not None:
                 lines.append(
                     "The estimate is fairly steady as data is added, which supports "
                     "trusting a full-sample half-life."

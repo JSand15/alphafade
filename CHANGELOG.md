@@ -22,11 +22,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comparison with Newey-West t-statistics.
 - `crowding_score`: Lou & Polk comomentum (leave-one-out, or pairwise) per trade leg.
 - `analyze` / `FadeReport` / `CrowdingLink`: everything in one call, with `.summary()`,
-  `.verdict()`, `.to_frame()` and `.plot()` (matplotlib via the `plot` extra).
+  `.verdict()`, `.to_frame()`, `.to_dict()`, `.to_json()` and `.plot()` (matplotlib via the
+  `plot` extra). With short history the default rolling window shrinks to a third of the data.
+- `signal_lifetime` / `LifetimeResult`: years (and calendar date) until a fitted edge falls to
+  a chosen level or share of its start, with a confidence interval.
+- `compare_signals` / `SignalComparison`: fit and rank many signals by decay speed, with Holm
+  or Benjamini-Hochberg multiple-testing adjustment.
+- `walk_forward_decay` / `WalkForwardResult`: expanding-window refits with no look-ahead and
+  stability measures for the half-life.
+- `ic_by_horizon` / `HorizonResult`: mean IC per forecast horizon (Newey-West t) and a horizon
+  half-life.
 - `datasets.load_ff3`, `datasets.load_momentum`: Ken French factors as decimals, downloaded
   only when asked, cached in `~/.cache/alphafade/` (or `$ALPHAFADE_CACHE`), or offline via `path=`.
 - Specific exceptions (`InputError`, `AlignmentError`, `FrequencyError`,
   `InsufficientDataError`, `DownloadError`) and warnings (`DataDroppedWarning`, `FitWarning`).
+- Safety: downloads are https-only (redirects included), time-limited, and size-capped; zip
+  files are decompressed with a cap on the real output size. Boolean data, overflow-scale
+  values, and Newey-West lags below the overlap floor are rejected with clear errors.
 - PEP 561 `py.typed` marker; `mypy --strict` clean.
 - Example: `examples/umd_momentum.py` (real momentum factor, 1963 to present).
 

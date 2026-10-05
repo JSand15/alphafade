@@ -179,7 +179,10 @@ Decay is **detected** only when the whole $(1-\alpha)$ interval for the rate lie
 and the point estimate is positive. Otherwise `half_life_years`, `ci_low`, and `ci_high` are
 `None` and the summary says "no detectable decay", because a huge half-life from an
 insignificant fit would be meaningless. The rule uses one side of a two-sided 95% interval,
-so a truly constant IC is flagged about 2.5% of the time (1 in 40 in a probe), as designed.
+so in principle a truly constant IC is flagged about 2.5% of the time. Because percentile
+bootstrap intervals run slightly narrow (they covered the true half-life 89-95% of the time in
+simulations, depending on autocorrelation), the measured false-detection rate for a constant
+edge was 4-6%; with no edge at all (mean zero) it was about 2-3%.
 
 ### 5.7 Linear fallback
 
@@ -222,8 +225,11 @@ w_l = 1 - \frac{l}{L+1}.$$
   positive.
 - **Default lags:** $L = \lfloor 4 (n/100)^{2/9} \rfloor$, a common rule of thumb based on
   Newey & West (1994); 4 for $n = 240$. `find_break`, `chow_test`, `publication_gap`,
-  and the linear starting-level test raise it to at least window $-1$ for a rolling series. `hac_lags=`
-  overrides it ($0 \le L < n$; $L = 0$ gives White, heteroskedasticity-only, errors).
+  and the linear starting-level test raise it to at least window $-1$ for a rolling series
+  (and `ic_by_horizon` to at least $h-1$ for $h$-period returns). `hac_lags=` overrides it
+  ($0 \le L < n$; $L = 0$ gives White, heteroskedasticity-only, errors), but a value below
+  that overlap floor is rejected with an `InputError`, because it would understate the
+  standard errors.
 - **No small-sample correction:** no $n/(n-k)$ factor, as in Newey & West (1987) and
   statsmodels' default.
 - **Verified** against `statsmodels.OLS(...).fit(cov_type="HAC", cov_kwds={"maxlags": L})`:
@@ -266,8 +272,9 @@ from $y - \bar y$ over the whole sample, not re-estimated around each candidate 
 reason is **size**, a test's false-alarm rate when there is no break, which should equal the
 nominal level. In simulations at $n = 240$ with independent data, the per-date version (a
 Newey-West sandwich at each candidate) rejected 9.3% of the time at the 5% level, versus
-5.0% for the single variance: taking the maximum over many noisily scaled statistics favours
-candidates whose variance was underestimated. The cost is some power (Section 11).
+about 3-5% for the single variance (3.3% at $n=240$ and 5.7% at $n=600$ in a later 2000-run
+check; it rises to about 9% with strongly autocorrelated data, AR(1) 0.5): taking the maximum over many noisily scaled statistics favours
+candidates whose variance was underestimated. The cost is some power (Section 16).
 
 **Break date.** The reported date is at $\arg\max_k W_k$. Because the denominator's variance
 is the same for every $k$, and splitting at $k$ reduces the sum of squared residuals by
@@ -338,7 +345,8 @@ out-of-sample decay. It is NaN when the post-sample period is empty.
 
 **Per-period table:** start, end, `n_obs`, mean, annualized mean ($\times P$), annualized
 Sharpe (mean / sd with $n-1$, $\times\sqrt{P}$, no risk-free rate), and a Newey-West t of the
-period mean, which needs more than 2 observations. Its lags are `hac_lags` (capped at the
+period mean, reported only for periods with at least 12 observations (NaN otherwise,
+because the Newey-West approximation is unreliable on fewer). Its lags are `hac_lags` (capped at the
 period length minus 1) when given; otherwise the default rule on that period's own length,
 raised to window $-1$ for a rolling series.
 
@@ -404,13 +412,83 @@ two methods are on different scales, so never compare one with the other.
 - **Percent to decimal.** French publishes percent, so every value is divided by 100 (2.89
   becomes 0.0289). Missing-data codes -99.99 and -999 become NaN with a `DataDroppedWarning`.
 - **Caching.** Nothing touches the network at import time. The first call downloads the zip
-  with the standard library (`urllib`, 30-second timeout) into `cache_dir=`, else
-  `$ALPHAFADE_CACHE`, else `~/.cache/alphafade/`. The write is atomic (temp file, then
-  rename). Later calls read the cache; `refresh=True` downloads again.
+  with the standard library (`urllib`) into `cache_dir=`, else `$ALPHAFADE_CACHE`, else
+  `~/.cache/alphafade/`. The write is atomic (temp file, then rename). Later calls read the
+  cache; `refresh=True` downloads again.
+- **Safety limits.** Each read times out after 30 seconds and a whole download after 120;
+  redirects are followed only to `https` addresses; downloads over 20 MB are refused; and a
+  zip is decompressed in chunks and abandoned once the real output passes 100 MB, whatever
+  size its header claims (a forged header is how "zip bombs" exhaust memory).
 - **Offline.** `path=` loads a local `.zip` or `.csv` in French's format with no network or
   cache.
 
-## 11. Known limitations
+## 11. The report (`analyze`, `FadeReport`)
+
+`analyze()` only calls the public functions above and bundles their results; it never
+re-implements their math. The rolling window defaults to three years of periods (36 months,
+156 weeks, 756 trading days). With less than nine years of history the default shrinks to a
+third of the data so a report can still be made; an explicit `window=` is never changed. The
+rolling IC uses the same window, capped at the number of IC dates, and the summary says so when
+that cap applies. `FadeReport.to_dict()` and `to_json()` export every scalar result as plain
+JSON-safe values (dates as ISO strings, NaN and infinity as `null`); `include_series=True` adds
+the time series.
+
+## 12. Lifetime (`signal_lifetime`)
+
+Turns a `DecayFit` into "when does the edge reach a level I care about?". For the exponential
+model $p(t) = a e^{-\lambda t}$ the time to a level $c$ is $t^* = \ln(a/c)/\lambda$; asking for a
+fraction $f$ of the starting level gives $\ln(1/f)/\lambda$, so $f = 0.5$ is exactly the
+half-life. For the linear model with starting level $b_0$ and proportional rate $r$ (share of
+$b_0$ lost per year), $t^* = (1 - c/b_0)/r$. The confidence interval pushes the bootstrap
+interval for the rate through the same formula **with the starting level held fixed**, so it
+ignores uncertainty in $a$ and is narrower than a full interval would be. No answer is given
+(with a reason) when no decay was detected, when the starting level is not positive, or when an
+exponential curve can never reach the level (a floor at or below zero); a level at or above the
+start returns zero years.
+
+## 13. Comparing many signals (`compare_signals`)
+
+Fits `fit_decay` to each column with its own reproducible random stream (child seeds from one
+`numpy.random.SeedSequence`, so dropping a column does not change the others' results). Testing
+many signals inflates false alarms: at a 5% level, about one in twenty pure-noise signals looks
+like it decays by luck. The one-sided bootstrap p-values are therefore adjusted:
+
+- **Holm** (default) controls the **family-wise error rate**, the chance of even one false
+  detection: sort the $m$ p-values ascending, multiply the $i$-th by $m - i + 1$, take running
+  maxima, cap at 1.
+- **Benjamini-Hochberg** (`adjust="bh"`) controls the **false discovery rate**, the expected
+  share of detections that are false: multiply the $i$-th smallest by $m/i$, take running minima
+  from the top, cap at 1. It finds more real effects but tolerates some false ones.
+
+`decay_detected_adjusted` requires both the adjusted p-value below `alpha` and the fit's own
+`decay_detected`. Signals are ranked by half-life (shortest first) among detections, then by raw
+p-value. Columns with fewer than 20 observations or constant values are skipped with a
+`DataDroppedWarning`.
+
+## 14. Walk-forward stability (`walk_forward_decay`)
+
+Refits `fit_decay` on expanding windows that end every `step` observations from `min_obs`
+onward, always including the full sample. Each fit sees only data up to its end date, so there
+is no look-ahead: changing later data cannot change an earlier row. Reported stability measures:
+the share of windows detecting decay; `stable_since`, the first end date from which every later
+window detects decay; and the **half-life drift**, (max − min) / median of the detected
+half-lives. A drift above 0.5 means the estimate moves a lot as data arrives, so a single
+full-sample half-life should not be trusted. Windows where the exponential fit falls back to
+linear are kept and flagged.
+
+## 15. Forecast-horizon decay (`ic_by_horizon`)
+
+The one tool that studies the forecast horizon rather than calendar time: for each horizon
+$h$ it builds $h$-period forward returns with `forward_returns` and averages `ic_series`.
+Because neighbouring $h$-period returns overlap, the Newey-West t-statistic uses at least
+$h-1$ lags. `ic_per_period` divides the mean IC by $h$. The horizon half-life fits
+$\text{IC}(h) = b\,e^{-kh}$ by least squares on the log of the positive mean ICs (at least
+three) and reports the horizon where the curve reaches half its value at the shortest fitted
+horizon, $h_{\min} + \ln 2/k$; no confidence interval is given. Note that a signal predicting
+only the next period still has cumulative IC near $\rho/\sqrt{h}$ at horizon $h$, so a
+shrinking IC across horizons is partly mechanical.
+
+## 16. Known limitations
 
 - **Survivorship bias.** If your universe holds only stocks that exist today, delisted stocks
   (often after crashing) are missing. That usually flatters a signal in early years, which can
@@ -427,13 +505,15 @@ two methods are on different scales, so never compare one with the other.
 - **Bootstrap percentile intervals** are simple but can be off when the bootstrap
   distribution is skewed or biased, as rate estimates near zero often are. Bootstrap rates
   that hit a grid bound are kept at the bound.
+- **Multiple testing.** Holm and Benjamini-Hochberg lower, but cannot remove, the chance that
+  a pure-noise signal is flagged as decaying.
 - **sup-Wald power loss.** Estimating the variance once from the whole demeaned series keeps
   the false-alarm rate honest, but a real break inflates that variance. In simulations at
   $n = 240$, a 1-standard-deviation shift was found 100% of the time either way, but a
   0.3-standard-deviation shift about 38% of the time, versus about 51% for the per-date
   variance (whose false-alarm rate is inflated to about 9%).
 
-## 12. References
+## 17. References
 
 - Andrews, D. W. K. (1993). Tests for parameter instability and structural change with
   unknown change point. *Econometrica*, 61(4), 821-856.

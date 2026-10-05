@@ -298,3 +298,21 @@ Sharpe unchanged by scaling).
   (explicit windows are unchanged).
 - Verified by: 256-combination junk-input fuzz (0 raw exceptions), 60-dataset random pipeline
   sweep (0 failures, strict JSON, CI contains estimate, seeded determinism).
+
+## Independent verification pass (2026-10-04/05)
+Four agents re-derived results against statsmodels/scipy/hand code and Monte Carlo.
+- Calibration: decay CI covers the true half-life 89-95%; null false detection 2-6%; NW,
+  Chow, CUSUM, publication regression match statsmodels to ~1e-12; Holm/BH exact; Holm keeps
+  the family-wise false-fade rate at ~6% for 10 noise signals (30% uncorrected).
+- Fixed: `ic_by_horizon` aligned panels before building forward returns (wrong ICs when signal
+  dates differ from return dates); verdict printed "-514% lower" for a post-publication rise;
+  `compare_signals` seeds now keyed by column name (order-independent); honest summaries in
+  `walk_forward_decay` and `ic_by_horizon` (no "trust"/"predicts best"/half-life claims the
+  numbers don't support; horizon half-life needs positive IC everywhere and t >= 2 at the
+  shortest horizon); `rolling_sharpe` constant-excess detection with varying rf, rf type
+  validation, rf-NaN warning; `rolling_ic` raises on no usable IC; clear min_periods message;
+  `crowding_score` leaves formation dates past the last return NaN with a warning;
+  `signal_lifetime` accepts numpy scalars.
+- Release workflow: `--refresh` on the TestPyPI verify retry, `skip-existing` on TestPyPI,
+  `uv run --locked`. README links absolute (PyPI). Methodology sections 11-15 added for the
+  newer features; three measured claims corrected.

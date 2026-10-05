@@ -3,7 +3,7 @@
 [![CI](https://github.com/JSand15/alphafade/actions/workflows/ci.yml/badge.svg)](https://github.com/JSand15/alphafade/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/alphafade.svg)](https://pypi.org/project/alphafade/)
 [![Python](https://img.shields.io/pypi/pyversions/alphafade.svg)](https://pypi.org/project/alphafade/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/JSand15/alphafade/blob/main/LICENSE)
 
 **Is my trading signal dying, and if so, how fast and why?**
 
@@ -126,7 +126,7 @@ print(walk.table[["n_obs", "decay_detected"]].tail(3))
 The fitted exponential edge reaches 50% of its starting level about 3.6 years after the sample start (95% CI 2.3 to 5.7), around 1983-08. That has already happened. The interval holds the starting level fixed and only varies the decay rate.
         half_life_years  p_adjusted  decay_detected_adjusted
 fading            3.554       0.000                     True
-noise               NaN       0.136                    False
+noise               NaN       0.129                    False
             n_obs  decay_detected
 2009-12-31    360            True
 2014-12-31    420            True
@@ -159,7 +159,8 @@ a report's headline numbers as plain data.
 | `datasets.load_ff3(freq)`, `datasets.load_momentum(freq)` | Ken French factors as decimals: explicit download, cached in `~/.cache/alphafade/`, or offline with `path=`. |
 
 Errors are specific and say how to fix the input: `InputError` (a `ValueError`),
-`AlignmentError`, `FrequencyError`, `InsufficientDataError`, `DownloadError`. Anything lossy
+`AlignmentError`, `FrequencyError`, `InsufficientDataError`, `DownloadError`, all subclasses
+of `AlphaFadeError`; warnings subclass `AlphaFadeWarning`. Anything lossy
 (dropping NaNs, thin cross-sections) emits a `DataDroppedWarning` with counts; unreliable
 fits emit `FitWarning`. Every function that uses randomness takes `rng=` (a seed or a numpy
 `Generator`).
@@ -205,9 +206,9 @@ backtester and doesn't build portfolios; you bring returns or a signal.
 
 ## Learn more
 
-- [`docs/methodology.md`](docs/methodology.md): every formula and default, with references.
-- [`examples/umd_momentum.py`](examples/umd_momentum.py): the end-to-end momentum study above.
-- [`CHANGELOG.md`](CHANGELOG.md) · [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- [`docs/methodology.md`](https://github.com/JSand15/alphafade/blob/main/docs/methodology.md): every formula and default, with references.
+- [`examples/umd_momentum.py`](https://github.com/JSand15/alphafade/blob/main/examples/umd_momentum.py): the end-to-end momentum study above.
+- [`CHANGELOG.md`](https://github.com/JSand15/alphafade/blob/main/CHANGELOG.md) · [`CONTRIBUTING.md`](https://github.com/JSand15/alphafade/blob/main/CONTRIBUTING.md)
 
 ## References
 

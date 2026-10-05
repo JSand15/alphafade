@@ -31,7 +31,7 @@ jobs:
           version=$(uv run --no-project python -c "import re,pathlib; print(re.search(r'__version__ = \"(.+?)\"', pathlib.Path('src/alphafade/__init__.py').read_text()).group(1))")
           test "v${version}" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} != version v${version}"; exit 1; }
       - name: Run the test suite
-        run: uv sync --locked --extra plot && uv run pytest -q
+        run: uv sync --locked --extra plot && uv run --locked pytest -q
       - name: Build
         run: uv build
       - name: Check metadata
@@ -57,6 +57,8 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           repository-url: https://test.pypi.org/legacy/
+          # Lets a failed run be re-run without the TestPyPI upload failing on a duplicate.
+          skip-existing: true
 
   verify-testpypi:
     needs: publish-testpypi
@@ -73,7 +75,9 @@ jobs:
           uv venv /tmp/check
           uv pip install --python /tmp/check/bin/python numpy pandas scipy
           for attempt in 1 2 3 4 5 6; do
-            uv pip install --python /tmp/check/bin/python --no-deps \
+            # --refresh: TestPyPI's index is cached for 10 minutes; without it every retry
+            # would reuse the first (stale) page and never see the new version.
+            uv pip install --python /tmp/check/bin/python --no-deps --refresh \
               --index-url https://test.pypi.org/simple/ "alphafade==${version}" && break
             echo "Not visible on TestPyPI yet; retrying in 20s"; sleep 20
           done

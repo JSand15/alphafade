@@ -287,3 +287,36 @@ def test_explicit_hac_lags_below_overlap_floor_is_rejected() -> None:
         ic_by_horizon(signal, returns, horizons=(12,), hac_lags=0)
     ok = ic_by_horizon(signal, returns, horizons=(12,), hac_lags=11)
     assert ok.table.loc[12, "n_dates"] > 0
+
+
+def _mismatched_panels() -> tuple[pd.DataFrame, pd.DataFrame]:
+    rng = np.random.default_rng(3)
+    dates = pd.date_range("2000-01-31", periods=180, freq="ME")
+    signal = pd.DataFrame(rng.standard_normal((180, 40)), index=dates)
+    noise = rng.standard_normal((180, 40))
+    returns = 0.05 * (0.3 * signal.shift(1).fillna(0).to_numpy() + noise)
+    return signal, pd.DataFrame(returns, index=dates)
+
+
+def test_signal_missing_a_month_matches_standalone_functions() -> None:
+    # Regression: panels used to be aligned BEFORE forward_returns, so "h periods ahead"
+    # counted the signal's dates and the IC next to a gap used the wrong month's return.
+    signal, returns = _mismatched_panels()
+    signal = signal.drop(index=signal.index[60])
+    with pytest.warns(DataDroppedWarning):
+        res = ic_by_horizon(signal, returns, horizons=(1, 2, 3))
+    for h in (1, 2, 3):
+        with pytest.warns(DataDroppedWarning):
+            expected = ic_series(signal, forward_returns(returns, h)).mean()
+        assert res.table.loc[h, "mean_ic"] == pytest.approx(expected, abs=1e-12)
+
+
+def test_quarterly_signal_with_monthly_returns_uses_next_month() -> None:
+    signal, returns = _mismatched_panels()
+    quarterly = signal[signal.index.month % 3 == 0]
+    with pytest.warns(DataDroppedWarning):
+        res = ic_by_horizon(quarterly, returns, horizons=(1,))
+    with pytest.warns(DataDroppedWarning):
+        expected = ic_series(quarterly, forward_returns(returns, 1)).mean()
+    assert res.table.loc[1, "mean_ic"] == pytest.approx(expected, abs=1e-12)
+    assert res.table.loc[1, "mean_ic"] > 0.15  # the true one-month IC is about 0.29

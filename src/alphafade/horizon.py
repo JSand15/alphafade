@@ -12,7 +12,7 @@ import pandas as pd
 
 from ._errors import InputError, InsufficientDataError
 from ._stats import FloatArray, hac_mean, resolve_hac_lags
-from ._validate import align_panels, as_panel, dropna_series, to_array
+from ._validate import as_panel, dropna_series, to_array
 from .rolling import ICMethod, forward_returns, ic_series
 
 __all__ = ["HorizonResult", "ic_by_horizon"]
@@ -35,14 +35,16 @@ class HorizonResult:
         comparison across horizons).
     half_life_periods : float or None
         The horizon at which the fitted mean IC has fallen to half of its fitted value at the
-        shortest horizon in the fit. None when the data cannot support it (see ``reason``).
+        shortest horizon in the fit. None (see ``reason``) unless the mean IC is positive at
+        every horizon and significant (t >= 2) at the shortest one.
         This is a point estimate only: no confidence interval is claimed, because the fit uses
         a handful of strongly overlapping, correlated points and any interval would overstate
         what is known.
     reason : str or None
         Why ``half_life_periods`` is None; None when it is a number.
     peak_horizon : int
-        Horizon with the largest mean IC.
+        Horizon with the largest (most positive) mean IC. Check ``table["t_stat"]``
+        before reading anything into it; ``summary()`` says when no horizon is significant.
     """
 
     table: pd.DataFrame = field(repr=False)
@@ -62,7 +64,22 @@ class HorizonResult:
                 f"  {int(h):>3} ahead: IC {row['mean_ic']:+.3f} (t = {row['t_stat']:.1f}, "
                 f"{int(row['n_dates'])} dates)"
             )
-        lines.append(f"The signal predicts best at a horizon of {self.peak_horizon} period(s).")
+        significant = (t["t_stat"].abs() >= 2).any()
+        if not significant:
+            lines.append(
+                "No horizon has a statistically significant IC (every |t| < 2), so the "
+                "differences between horizons may be noise."
+            )
+        elif (t["mean_ic"] <= 0).all():
+            strongest = int(t.index[int(np.argmax(t["mean_ic"].abs().to_numpy()))])
+            lines.append(
+                "Every mean IC is negative: the signal predicts returns in the OPPOSITE "
+                f"direction, most strongly at a horizon of {strongest} period(s)."
+            )
+        else:
+            lines.append(
+                f"The signal predicts best at a horizon of {self.peak_horizon} period(s)."
+            )
         if self.half_life_periods is not None:
             lines.append(
                 f"Fitted half-life: the mean IC halves by about {self.half_life_periods:.1f} "
@@ -140,7 +157,8 @@ def ic_by_horizon(
     hac_lags : int, optional
         Newey-West lags for each t-statistic. Default: the usual plug-in rule, but at least
         ``h - 1``, because neighbouring ``h``-period windows share ``h - 1`` periods of
-        returns and their ICs are therefore correlated. An explicit value is used as given.
+        returns and their ICs are therefore correlated. An explicit value below ``h - 1``
+        raises :class:`InputError`, since it would overstate significance.
 
     Returns
     -------
@@ -193,9 +211,12 @@ def ic_by_horizon(
         raise InputError(f"min_assets must be an integer, got {min_assets!r}.")
     if min_assets < 2:
         raise InputError("min_assets must be at least 2 (a correlation needs 2 points).")
-    sig, ret = align_panels(
-        as_panel(signal, "signal"), as_panel(returns, "returns"), "signal", "returns"
-    )
+    sig = as_panel(signal, "signal")
+    ret = as_panel(returns, "returns")
+    # Build forward returns on the FULL return history and only then line them up with the
+    # signal (ic_series does that). Aligning first would make "h periods ahead" count the
+    # signal's dates, so a missing signal month or a quarterly signal would silently pair
+    # each date with the wrong future return.
 
     rows: list[dict[str, float]] = []
     seen: set[tuple[type, str]] = set()
@@ -234,7 +255,27 @@ def ic_by_horizon(
     table = pd.DataFrame(rows, index=pd.Index(hs, name="horizon"))
     table["n_dates"] = table["n_dates"].astype("int64")
     mean_ic_arr = table["mean_ic"].to_numpy(dtype=np.float64)
-    half_life, reason = _fit_half_life(np.asarray(hs, dtype=np.float64), mean_ic_arr)
+    t_arr = table["t_stat"].to_numpy(dtype=np.float64)
+    half_life: float | None
+    reason: str | None
+    if (mean_ic_arr <= 0).any():
+        half_life, reason = (
+            None,
+            (
+                "the mean IC is not positive at every horizon, so a single decay curve does "
+                "not describe it."
+            ),
+        )
+    elif not t_arr[0] >= 2:
+        half_life, reason = (
+            None,
+            (
+                f"the IC at the shortest horizon ({hs[0]}) is not statistically significant "
+                "(t < 2), so there is no clear edge to measure the fade of."
+            ),
+        )
+    else:
+        half_life, reason = _fit_half_life(np.asarray(hs, dtype=np.float64), mean_ic_arr)
     return HorizonResult(
         table=table,
         half_life_periods=half_life,

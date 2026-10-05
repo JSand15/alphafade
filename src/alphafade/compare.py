@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import warnings
 from dataclasses import dataclass, field
 from typing import Literal
@@ -117,7 +118,7 @@ class SignalComparison:
                 "Why correct: each signal has a small chance of looking like it is fading "
                 "by luck alone, and testing many signals multiplies the chances that at "
                 "least one does. The correction raises each p-value to account for how "
-                "many signals were tested, so fakes are filtered out."
+                "many signals were tested, which removes most, though not all, false alarms."
             )
         return "\n".join(lines)
 
@@ -150,8 +151,9 @@ def compare_signals(
     adjust : {"holm", "bh", "none"}, default "holm"
         Multiple-testing correction.
     rng : int, numpy Generator, or None
-        Seed. Each column gets its own independent sub-seed (spawned from this seed by
-        column position), so the same seed reproduces results exactly.
+        Seed. Each column gets its own independent sub-seed derived from this seed and the
+        column's name, so the same seed reproduces results exactly, whatever the column
+        order and whichever other columns are present or skipped.
 
     Returns
     -------
@@ -199,9 +201,11 @@ def compare_signals(
         root = np.random.SeedSequence(None if rng is None else int(rng))
     else:
         raise InputError(f"rng must be an int seed, a numpy Generator, or None; got {rng!r}.")
-    # One child per input column position, so a column's seed does not depend on which of
-    # the other columns were skipped.
-    children = root.spawn(panel.shape[1])
+    # Each column's random stream is keyed by its NAME (not its position), so reordering,
+    # adding, or skipping other columns never changes a column's result.
+    children = [
+        np.random.SeedSequence(root.entropy, spawn_key=(_name_key(col),)) for col in panel.columns
+    ]
 
     fits: dict[str, DecayFit] = {}
     skipped: list[str] = []
@@ -285,3 +289,9 @@ def compare_signals(
     return SignalComparison(
         table=df, fits=fits, adjust=adjust, alpha=alpha, skipped=tuple(skipped)
     )
+
+
+def _name_key(name: object) -> int:
+    """Return a stable 64-bit integer for a column label (same across runs and machines)."""
+    digest = hashlib.blake2b(repr(name).encode("utf-8"), digest_size=8).digest()
+    return int.from_bytes(digest, "big")

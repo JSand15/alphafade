@@ -173,7 +173,15 @@ def crowding_score(
     out = np.full((len(formation), 4), np.nan)
     thin_stocks = 0
     thin_legs = 0
+    stale = 0
+    # A formation date well past the last return would be scored on old data; leave it NaN.
+    # "Well past" = more than two return periods (and at least a week) after the last return.
+    spacing = np.median(np.diff(ret_idx)) if len(ret_idx) > 1 else np.timedelta64(7, "D")
+    stale_after = ret_idx[-1] + max(2 * spacing, np.timedelta64(7, "D"))
     for row, date in enumerate(formation):
+        if np.datetime64(date) > stale_after:
+            stale += 1
+            continue
         end = int(np.searchsorted(ret_idx, np.datetime64(date), side="right"))
         start = end - window
         if start < 0:
@@ -198,6 +206,14 @@ def crowding_score(
     if thin_stocks:
         warnings.warn(
             f"Skipped {thin_stocks} stock-window(s) with fewer than {min_obs} returns.",
+            DataDroppedWarning,
+            stacklevel=2,
+        )
+    if stale:
+        warnings.warn(
+            f"{stale} formation date(s) fall after the last stock return "
+            f"({pd.Timestamp(ret_idx[-1]):%Y-%m-%d}); their score is NaN rather than computed "
+            "from stale data. Extend stock_returns to cover them.",
             DataDroppedWarning,
             stacklevel=2,
         )
