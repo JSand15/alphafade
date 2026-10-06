@@ -2,13 +2,14 @@ name: Release
 
 # Push a version tag to release, e.g.:
 #   git tag v0.1.0 && git push origin v0.1.0
-# The package is built once, published to TestPyPI, installed back from TestPyPI and
-# smoke-tested, and only then published to PyPI.
+# The package is built and tested once, published to PyPI, then installed back from PyPI
+# and smoke-tested.
 #
-# Uses PyPI Trusted Publishing (OIDC): no API tokens are stored anywhere.
-# One-time setup (see RELEASING.md): on test.pypi.org and pypi.org add a "pending publisher"
-# with owner JSand15, repository alphafade, workflow release.yml, and environments
-# "testpypi" and "pypi" respectively.
+# Uses PyPI Trusted Publishing (OIDC): no API tokens are stored anywhere. PyPI accepts the
+# upload only from a GitHub environment registered as a trusted publisher for alphafade on
+# pypi.org (owner JSand15, repository alphafade, workflow release.yml). The publisher on
+# pypi.org was registered with the environment name "testpypi", so the upload tries the
+# "pypi" environment first and falls back to "testpypi"; both upload to pypi.org.
 
 on:
   push:
@@ -41,53 +42,32 @@ jobs:
           name: dist
           path: dist/
 
-  publish-testpypi:
+  publish-pypi:
     needs: build
     runs-on: ubuntu-latest
     environment:
-      name: testpypi
-      url: https://test.pypi.org/p/alphafade
+      name: pypi
+      url: https://pypi.org/p/alphafade
     permissions:
       id-token: write
+    outputs:
+      published: ${{ steps.upload.outcome == 'success' }}
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          # Lets a failed run be re-run without the TestPyPI upload failing on a duplicate.
-          skip-existing: true
+      - id: upload
+        # If no publisher matches this environment, the fallback job below tries the other.
+        continue-on-error: true
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 
-  verify-testpypi:
-    needs: publish-testpypi
-    runs-on: ubuntu-latest
-    steps:
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          python-version: "3.12"
-      - name: Install from TestPyPI and smoke-test
-        # Dependencies come from real PyPI first; only alphafade itself is taken from
-        # TestPyPI (--no-deps), so a look-alike package on TestPyPI can't sneak in.
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          uv venv /tmp/check
-          uv pip install --python /tmp/check/bin/python numpy pandas scipy
-          for attempt in 1 2 3 4 5 6; do
-            # --refresh: TestPyPI's index is cached for 10 minutes; without it every retry
-            # would reuse the first (stale) page and never see the new version.
-            uv pip install --python /tmp/check/bin/python --no-deps --refresh \
-              --index-url https://test.pypi.org/simple/ "alphafade==${version}" && break
-            echo "Not visible on TestPyPI yet; retrying in 20s"; sleep 20
-          done
-          /tmp/check/bin/python -c "import alphafade as af; assert af.__version__ == '${version}'; print('ok', af.__version__)"
-
-  publish-pypi:
-    needs: verify-testpypi
+  publish-pypi-fallback:
+    needs: [build, publish-pypi]
+    if: needs.publish-pypi.outputs.published != 'true'
     runs-on: ubuntu-latest
     environment:
-      name: pypi
+      name: testpypi
       url: https://pypi.org/p/alphafade
     permissions:
       id-token: write
@@ -97,3 +77,24 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
+  verify-pypi:
+    needs: [publish-pypi, publish-pypi-fallback]
+    if: >-
+      always() && (needs.publish-pypi.outputs.published == 'true'
+      || needs.publish-pypi-fallback.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.12"
+      - name: Install from PyPI and smoke-test
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          uv venv /tmp/check
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            # --refresh: the index page is cached; without it retries reuse a stale page.
+            uv pip install --python /tmp/check/bin/python --refresh "alphafade==${version}" && break
+            echo "Not visible on PyPI yet; retrying in 20s"; sleep 20
+          done
+          /tmp/check/bin/python -c "import alphafade as af; assert af.__version__ == '${version}'; print('ok', af.__version__, len(af.__all__))"
