@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-06
+
+### Changed
+- PyPI page: clearer README (what you get, who it's for, why to trust it), more search
+  keywords, and a Documentation link. No code changes.
+
 ## [0.1.0] - 2026-10-06
 
 ### Added
@@ -42,5 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PEP 561 `py.typed` marker; `mypy --strict` clean.
 - Example: `examples/umd_momentum.py` (real momentum factor, 1963 to present).
 
-[Unreleased]: https://github.com/JSand15/alphafade/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/JSand15/alphafade/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/JSand15/alphafade/releases/tag/v0.1.1
 [0.1.0]: https://github.com/JSand15/alphafade/releases/tag/v0.1.0

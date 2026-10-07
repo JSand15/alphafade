@@ -30,7 +30,7 @@ from .report import CrowdingLink, FadeReport, analyze
 from .rolling import forward_returns, ic_series, rolling_ic, rolling_sharpe
 from .walkforward import WalkForwardResult, walk_forward_decay
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "AlignmentError",

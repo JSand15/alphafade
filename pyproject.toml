@@ -21,6 +21,14 @@ keywords = [
     "comomentum",
     "crowding",
     "anomalies",
+    "alpha decay half-life",
+    "trading signal",
+    "quantitative finance",
+    "factor investing",
+    "momentum",
+    "McLean Pontiff",
+    "backtesting",
+    "Newey-West",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -50,6 +58,7 @@ plot = ["matplotlib>=3.8"]
 
 [project.urls]
 Homepage = "https://github.com/JSand15/alphafade"
+Documentation = "https://github.com/JSand15/alphafade/blob/main/docs/methodology.md"
 Repository = "https://github.com/JSand15/alphafade"
 Issues = "https://github.com/JSand15/alphafade/issues"
 Changelog = "https://github.com/JSand15/alphafade/blob/main/CHANGELOG.md"

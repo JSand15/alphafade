@@ -7,15 +7,45 @@
 
 **Is my trading signal dying, and if so, how fast and why?**
 
-Most tools measure how a signal's predictive power fades over the days after each trade.
-alphafade measures something different: how a signal's edge shrinks across *calendar time*
-(months and years), and whether that shrinkage lines up with crowding, meaning more money
-chasing the same pattern. It fits a decay curve and reports an honest half-life with a
-bootstrap confidence interval, or says "no detectable decay" when the data can't tell. It
-also tests for structural breaks, measures the post-publication drop McLean & Pontiff (2016)
-made famous, and computes a Lou & Polk comomentum crowding score. Every t-statistic is
-autocorrelation-robust (Newey-West), and nothing is dropped, resampled, or shifted behind your
-back.
+Every trading edge fades as more people find it. alphafade tells you whether yours has, how
+fast, and whether the fade lines up with crowding (more money chasing the same pattern). It
+gives you an honest answer: a half-life with a confidence interval, or "no detectable decay"
+when the data can't tell.
+
+Most tools measure how a signal's power fades over the days after each trade. alphafade
+measures something different: how the edge shrinks across *calendar time* (months and years).
+
+## What you get
+
+- **A decay half-life.** How many years until the edge halves, with a bootstrap confidence
+  interval, compared against a straight-line fade.
+- **Break and publication tests.** Did the edge drop at a date you chose, at an unknown date,
+  or after the academic paper came out (the McLean & Pontiff 2016 effect)?
+- **A crowding score.** Lou & Polk comomentum: how much a trade's stocks move together.
+- **Lifetime forecasts.** `signal_lifetime`: when does a fading edge reach a level you care about?
+- **Many signals at once.** `compare_signals` ranks them and corrects for testing many (otherwise
+  some pure-noise signal always looks like it is fading by luck).
+- **A stability check.** `walk_forward_decay` refits as data arrives, so you can see whether the
+  half-life is real or a quirk of one sample, with no look-ahead.
+- **Forecast-horizon decay.** `ic_by_horizon`: how many periods ahead a signal still predicts.
+- **One report.** `analyze()` runs it all and gives plain English, a chart, or JSON.
+
+## Who it's for
+
+Quant researchers and students who want to know whether a published anomaly still works,
+analysts monitoring a live strategy for decay, and anyone testing the claim that "alpha
+decays". No finance degree needed to read the output: every result comes with a plain-English
+summary.
+
+## Why trust it
+
+- Every t-statistic is autocorrelation-robust (Newey-West) and checked against statsmodels.
+- Confidence intervals were tested by simulation: they contain the true half-life 89-95% of
+  the time, and flag decay in pure noise only 2-6% of the time.
+- Nothing is dropped, resampled, or shifted behind your back; anything lossy raises a warning.
+- Bad inputs get a clear error that says how to fix them, never a confident wrong number.
+- 500+ tests on Python 3.11 to 3.14, strict type checking, and a fully documented method
+  (every formula is in [`docs/methodology.md`](https://github.com/JSand15/alphafade/blob/main/docs/methodology.md)).
 
 ## Install
 
