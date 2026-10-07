@@ -16,11 +16,10 @@ and every decision that refines or overrides the spec, with its reason.
 | M6 CI, packaging, TestPyPI release | Done except the release itself: CI green on GitHub (10 jobs); the release workflow is ready and waits on Jeevun's one-time trusted-publisher setup (RELEASING.md) |
 | M7 Five extra features (approved 2026-09-29) | Done 2026-09-29: `signal_lifetime`, `compare_signals`, `walk_forward_decay`, `ic_by_horizon`, `FadeReport.to_dict/to_json`; independent review found no math errors; 506+ tests on 3.11-3.14 and lowest deps |
 
-**Next action:** Jeevun does the one-time PyPI/TestPyPI trusted-publisher setup in RELEASING.md,
-then pushes tag `v0.1.0` (`git tag v0.1.0 && git push origin v0.1.0`). Then watch the Release
-workflow: TestPyPI → verify install → PyPI. After release: confirm `pip install alphafade` from
-PyPI in a fresh macOS venv (the last definition-of-done item that needs the real index).
-
+**Released:** alphafade 0.1.0 is live on PyPI (https://pypi.org/project/alphafade/, 2026-10-06),
+published by `.github/workflows/release.yml` via trusted publishing and verified by a fresh
+`pip install`. Next release: bump `__version__`, update CHANGELOG, tag `vX.Y.Z`, approve the
+`pypi` environment in the Actions tab.
 ---
 
 ## M0 plan (proposed 2026-09-26)
@@ -316,3 +315,10 @@ Four agents re-derived results against statsmodels/scipy/hand code and Monte Car
 - Release workflow: `--refresh` on the TestPyPI verify retry, `skip-existing` on TestPyPI,
   `uv run --locked`. README links absolute (PyPI). Methodology sections 11-15 added for the
   newer features; three measured claims corrected.
+
+## Release (2026-10-06)
+- TestPyPI uploads failed with `invalid-publisher`: the pending publisher had been registered on
+  pypi.org (environment `testpypi`), not on test.pypi.org. Workflow now publishes straight to
+  pypi.org, trying GitHub environment `pypi` then `testpypi`, and verifies the install from PyPI.
+  The `pypi` job still waits for reviewer approval before either upload runs.
+- Tag `v0.1.0` was moved to the fixed workflow commit (the first tag never uploaded anything).
