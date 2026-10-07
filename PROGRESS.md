@@ -16,7 +16,7 @@ and every decision that refines or overrides the spec, with its reason.
 | M6 CI, packaging, TestPyPI release | Done except the release itself: CI green on GitHub (10 jobs); the release workflow is ready and waits on Jeevun's one-time trusted-publisher setup (RELEASING.md) |
 | M7 Five extra features (approved 2026-09-29) | Done 2026-09-29: `signal_lifetime`, `compare_signals`, `walk_forward_decay`, `ic_by_horizon`, `FadeReport.to_dict/to_json`; independent review found no math errors; 506+ tests on 3.11-3.14 and lowest deps |
 
-**Released:** alphafade 0.1.0 is live on PyPI (https://pypi.org/project/alphafade/, 2026-10-06),
+**Released:** alphafade 0.1.1 is live on PyPI (https://pypi.org/project/alphafade/, 2026-10-06),
 published by `.github/workflows/release.yml` via trusted publishing and verified by a fresh
 `pip install`. Next release: bump `__version__`, update CHANGELOG, tag `vX.Y.Z`, approve the
 `pypi` environment in the Actions tab.
