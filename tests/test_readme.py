@@ -10,6 +10,8 @@ from pathlib import Path
 import matplotlib
 import pytest
 
+from alphafade._cli import _read_csv
+
 matplotlib.use("Agg")
 
 README = (Path(__file__).resolve().parents[1] / "README.md").read_text()
@@ -42,6 +44,21 @@ def test_quickstart_runs_as_written() -> None:
     printed = run(PYTHON[0])
     assert "Verdict:" in printed
     assert "After publication" in printed
+
+
+def test_floor_example_runs_and_prints_what_readme_shows() -> None:
+    code = next(c for c in PYTHON if "fit_floor_decay" in c)
+    printed = run(code)
+    shown = next(c for lang, c in BLOCKS if lang == "text" and "Floor decay fit" in c)
+    assert printed.strip() == shown.strip()
+
+
+def test_csv_sample_in_readme_is_readable(tmp_path: Path) -> None:
+    sample = next(c for lang, c in BLOCKS if lang == "text" and c.startswith("date,ret"))
+    path = tmp_path / "returns.csv"
+    path.write_text(sample)
+    table = _read_csv(str(path))
+    assert list(table.columns) == ["date", "ret"]
 
 
 def test_beyond_the_basics_example_runs_and_prints_what_readme_shows() -> None:

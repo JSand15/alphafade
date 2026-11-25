@@ -98,3 +98,4 @@ jobs:
             echo "Not visible on PyPI yet; retrying in 20s"; sleep 20
           done
           /tmp/check/bin/python -c "import alphafade as af; assert af.__version__ == '${version}'; print('ok', af.__version__, len(af.__all__))"
+          /tmp/check/bin/alphafade --version

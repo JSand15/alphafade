@@ -48,6 +48,10 @@ Releasing: see RELEASING.md (tag `vX.Y.Z` → TestPyPI → PyPI via trusted publ
   errors (autouse fixture in `tests/conftest.py`), so use `pytest.warns` when one is expected.
 - `analyze()` (report.py) only orchestrates: it calls the public functions and never
   re-implements their math. `plotting.py` is imported lazily from `FadeReport.plot()`.
+- `_cli.py` (the `alphafade` command) only reads CSVs and prints: no math, and it never sorts,
+  fills or guesses at user data.
+- `floor.py` uses a *wild* block bootstrap on purpose (a moving-block one raised false alarms
+  about 35% of the time when early data were noisier). Re-run a simulation before changing it.
 - `datasets.py` is the only module allowed to touch the network (lazy `urllib` import).
 - README code is executed by `tests/test_readme.py`. If you change README examples, the
   printed output shown in the README must still match exactly.

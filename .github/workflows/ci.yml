@@ -74,3 +74,4 @@ jobs:
           uv venv /tmp/smoke
           uv pip install --python /tmp/smoke/bin/python dist/*.whl
           /tmp/smoke/bin/python -c "import alphafade as af; print(af.__version__, len(af.__all__))"
+          /tmp/smoke/bin/alphafade --version

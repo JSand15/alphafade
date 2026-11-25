@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-24
+
+### Added
+- `fit_floor_decay` / `FloorFit`: does an edge fade all the way to zero, or level off at a
+  floor? Wild block bootstrap test and intervals; a floor is reported only when the fade is
+  detected and the curve visibly levels off inside the sample.
+- `alphafade` command line tool (`alphafade report file.csv`, `alphafade floor file.csv`, also
+  `python -m alphafade`): run the analyses on a CSV file without writing Python, with text or
+  JSON output and an optional chart.
+
+### Documentation
+- Measured limitation: `fit_decay` raises more false alarms when early data are much more
+  volatile than later data.
+
 ## [0.1.1] - 2026-10-06
 
 ### Changed
@@ -48,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PEP 561 `py.typed` marker; `mypy --strict` clean.
 - Example: `examples/umd_momentum.py` (real momentum factor, 1963 to present).
 
-[Unreleased]: https://github.com/JSand15/alphafade/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/JSand15/alphafade/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/JSand15/alphafade/releases/tag/v0.2.0
 [0.1.1]: https://github.com/JSand15/alphafade/releases/tag/v0.1.1
 [0.1.0]: https://github.com/JSand15/alphafade/releases/tag/v0.1.0

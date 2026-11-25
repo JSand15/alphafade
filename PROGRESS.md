@@ -14,12 +14,20 @@ and every decision that refines or overrides the spec, with its reason.
 | M4 crowding_score | Done 2026-09-27: 171 passed, crowding.py 97% coverage |
 | M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | Done 2026-09-27: 186 passed, 99% total coverage |
 | M6 CI, packaging, TestPyPI release | Done except the release itself: CI green on GitHub (10 jobs); the release workflow is ready and waits on Jeevun's one-time trusted-publisher setup (RELEASING.md) |
+| M8 0.2.0: floor model + command line (approved 2026-11-24) | Built and committed on branch `feature/0.2.0` 2026-11-24: 636 passed, 2 deselected, 98% coverage. Not merged, pushed or released |
 | M7 Five extra features (approved 2026-09-29) | Done 2026-09-29: `signal_lifetime`, `compare_signals`, `walk_forward_decay`, `ic_by_horizon`, `FadeReport.to_dict/to_json`; independent review found no math errors; 506+ tests on 3.11-3.14 and lowest deps |
 
 **Released:** alphafade 0.1.1 is live on PyPI (https://pypi.org/project/alphafade/, 2026-10-06),
 published by `.github/workflows/release.yml` via trusted publishing and verified by a fresh
 `pip install`. Next release: bump `__version__`, update CHANGELOG, tag `vX.Y.Z`, approve the
 `pypi` environment in the Actions tab.
+
+**Next action:** Jeevun reviews 0.2.0. Then merge `feature/0.2.0` into `main`, check CI, set the
+CHANGELOG date to the release day, and tag `v0.2.0`.
+
+**Open:** PyPI's trusted publisher is registered under environment `testpypi`, so the first
+upload job fails every release and the fallback uploads. Fix: Jeevun adds a publisher with
+environment `pypi` on pypi.org, then the fallback job is removed from `release.yml`.
 ---
 
 ## M0 plan (proposed 2026-09-26)
@@ -322,3 +330,31 @@ Four agents re-derived results against statsmodels/scipy/hand code and Monte Car
   pypi.org, trying GitHub environment `pypi` then `testpypi`, and verifies the install from PyPI.
   The `pypi` job still waits for reviewer approval before either upload runs.
 - Tag `v0.1.0` was moved to the fixed workflow commit (the first tag never uploaded anything).
+
+## M8 decisions (2026-11-24)
+- Jeevun picked two features: a floor model and a command line tool.
+- `fit_floor_decay` is a separate function and result type, so `fit_decay`, `analyze` and every
+  result built on `DecayFit` behave exactly as in 0.1.1. `signal_lifetime` and `analyze` do not
+  use the floor yet.
+- Wild block bootstrap instead of the moving-block one used by `fit_decay`: in 300-run
+  simulations with early data 4x as volatile, the moving-block change test raised false alarms
+  35% of the time, the wild one about 4%.
+- A floor is reported only if (a) a change is detected, (b) fewer than alpha/2 of bootstrap
+  refits need a half-life as long as the sample, and (c) the floor is no further from zero than
+  the start. Guard (b) cut false "survives" claims for half-life = sample span from 14% to 4%.
+- Bootstrap refits use a parabolic step instead of golden section (rate differs under 0.1%):
+  60 years of daily data went from 78 s to 0.9 s.
+- CLI: standard-library argparse, no new dependencies. Never sorts, fills or guesses; ambiguous
+  dates need `--date-format`; default `--seed 0`. Warnings go to stderr.
+- Testing found and fixed: pandas silently dropping values from ragged CSV rows (now an
+  error), a crash on a bad `--date-format`, and a crash on values near 1e-200.
+- Calibration of the shipped code (2000 runs per scenario, 999 resamples): see methodology 5.9.
+  Weak spots: with a true floor of 0, "survives" appears 3-6% of the time (ideal 2.5%); floor
+  interval coverage is 86-94% (nominal 95%); noisy monthly returns rarely yield a floor.
+
+## Found, not fixed (needs Jeevun's decision)
+- `fit_decay`'s false-alarm rate on constant series (300 runs): 6% steady noise, 8% with early
+  noise 2x, 12% with early noise 4x (ideal about 2.5%). Documented in README and methodology.
+  A wild bootstrap would probably help, but it changes existing results, so it needs its own
+  calibration and approval.
+
