@@ -71,3 +71,17 @@ def test_block_bootstrap_indices(rng: np.random.Generator) -> None:
     assert _stats.default_block_size(1000) == 17
     assert _stats.default_block_size(1000, min_block=36) == 36
     assert _stats.default_block_size(5, min_block=36) == 5
+
+
+def test_wild_block_signs_flip_whole_blocks() -> None:
+    signs = _stats.wild_block_signs(100, 5, 400, np.random.default_rng(0))
+    assert signs.shape == (400, 100)
+    assert set(np.unique(signs)) == {-1.0, 1.0}
+    assert abs(float(signs.mean())) < 0.02
+    for row in signs[:50]:
+        changes = np.flatnonzero(np.diff(row)) + 1
+        # Sign changes only ever happen on block edges, all sharing one offset.
+        assert len(set(changes % 5)) <= 1
+    # Block of 1 is the ordinary wild bootstrap: neighbours are independent.
+    single = _stats.wild_block_signs(2000, 1, 50, np.random.default_rng(1))
+    assert abs(float((single[:, 1:] * single[:, :-1]).mean())) < 0.02

@@ -208,6 +208,60 @@ deviation of about 6%, so roughly 1 in 4 to 7 draws misses the true half-life by
 10%, although the median error across 25 seeds is under 3% (close to unbiased). Always read
 the confidence interval, not just the point estimate.
 
+### 5.9 A floor instead of zero (`fit_floor_decay`)
+
+**Model.** $p(t) = c + g\,e^{-\lambda t}$, where $c$ is the **floor** (the level the curve
+heads to), $c + g$ is the starting level, and $\ln 2/\lambda$ is the time to close half of the
+gap. At least 36 observations are needed.
+
+**Fit.** For a fixed $\lambda$ this is a straight-line regression on $e^{-\lambda t}$, so $c$
+and $g$ have closed forms and only $\lambda$ is searched: 240 log-spaced rates from a
+half-life of the whole sample span down to a half-life of 1% of it (or 3 observations), then
+golden-section refinement. Bootstrap refits refine with one parabola through the three
+nearest grid points instead (rates differ from the golden-section ones by under 0.1%).
+
+**Wild block bootstrap.** Resamples are $y^* = m + e \cdot v$, where $v$ is $+1$ or $-1$,
+constant within blocks of the length in 5.5 (with a random offset). Each residual stays at its
+own date, so a calm period never inherits a volatile period's noise. This differs from 5.4 on
+purpose: with a constant mean and a first 8 of 40 years four times as volatile, a moving-block
+version of this test reported a change about 35% of the time, against about 4% for the wild
+one.
+
+**Three questions, in order.**
+
+1. *Did anything change?* The statistic is $(SSE_{const} - SSE_{floor}) / SSE_{floor}$. Its
+   null distribution comes from resamples with $m = \bar y$ and $e = y - \bar y$. The p-value
+   is $(1 + \#\{F^* \ge F\}) / (1 + B)$. A bootstrap is needed because $\lambda$ does not exist
+   under "no change", so textbook F tables do not apply.
+2. *Is the floor identified?* Resamples around the fitted curve are refitted. The floor counts
+   as identified only if the best $\lambda$ is inside the search range and the $\alpha/2$
+   quantile of the refitted rates is above the slowest rate, meaning almost no refit needed a
+   half-life as long as the sample.
+3. *Is it a fade?* $|c| \le |c + g|$.
+
+A floor is reported only if all three hold. Intervals are percentiles of the refitted $c$ and
+$\lambda$. With $s$ the sign of the starting level, the outcome is `survives` if the interval
+for $s\,c$ is entirely above 0, `reverses` if entirely below, otherwise `may_reach_zero`.
+
+**Measured error rates** (2000 simulated monthly series per row, 999 resamples, nominal
+$\alpha$ = 5%; independent normal noise unless stated):
+
+| True series | Change detected | "survives" claimed | Floor interval covers truth |
+|---|---|---|---|
+| Constant, 40 years (steady, uneven, heavy-tailed or autocorrelated noise) | 3-5% | under 1% | - |
+| Fades to 0, half-life 4 years, 60 years | 100% | 3-4% | 91-93% |
+| Fades to 0, half-life 2 years, 10 years | 100% | 5% | 89% |
+| Fades to 0, half-life 1 year, 5 years | 100% | 6% | 86% |
+| Fades to 0, half-life 40 years, 40 years | 100% | 4% | floor reported 4% of the time, and then wrong |
+| Floor 0.04 under a 0.10 start, 60 years | 100% | 100% | 93% |
+| Noisy returns: 0.012 fading to 0.004 (noise sd 0.035), 60 years | 20% | 0.4% | 89% when reported (3% of series) |
+| Noisy returns: 0.012 fading to 0 (noise sd 0.035), 60 years | 39% | 0.1% | 94% when reported (10% of series) |
+
+When the truth is a floor of zero, "survives" should ideally appear 2.5% of the time, so treat
+a borderline "survives" with care, especially on short samples. A fade slower than the sample
+usually yields no floor, but the few that slip through are badly wrong: a floor is an
+extrapolation of the assumed curve.
+
 ## 6. Newey-West standard errors
 
 A **standard error** measures how uncertain an estimate is, and a **t-statistic** is an
@@ -500,8 +554,13 @@ shrinking IC across horizons is partly mechanical.
 - **Asymptotic p-values.** The $\chi^2(1)$, sup-Wald, Kolmogorov (CUSUM), and Newey-West
   results are large-sample approximations; in short or very persistent series the true
   false-alarm rate can differ from the nominal one.
-- **Decay toward zero.** $a e^{-\lambda t}$ has no floor. A signal that settles at a smaller
-  but positive long-run level gets a longer half-life than its initial fall suggests.
+- **Decay toward zero.** `fit_decay`'s $a e^{-\lambda t}$ has no floor. A signal that settles at
+  a smaller but positive long-run level gets a longer half-life than its initial fall
+  suggests. `fit_floor_decay` (5.9) estimates the floor, but needs far more data.
+- **Uneven volatility and `fit_decay`.** Its moving-block bootstrap mixes residuals across
+  time. In 300 simulations of a constant 40-year series it reported decay 6% of the time with
+  steady noise, 8% when the first 8 years were twice as volatile, and 12% when they were four
+  times as volatile (ideal: about 2.5%).
 - **Bootstrap percentile intervals** are simple but can be off when the bootstrap
   distribution is skewed or biased, as rate estimates near zero often are. Bootstrap rates
   that hit a grid bound are kept at the bound.

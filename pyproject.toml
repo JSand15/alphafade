@@ -56,6 +56,9 @@ dependencies = [
 [project.optional-dependencies]
 plot = ["matplotlib>=3.8"]
 
+[project.scripts]
+alphafade = "alphafade._cli:main"
+
 [project.urls]
 Homepage = "https://github.com/JSand15/alphafade"
 Documentation = "https://github.com/JSand15/alphafade/blob/main/docs/methodology.md"

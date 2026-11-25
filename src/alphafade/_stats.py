@@ -128,6 +128,22 @@ def default_block_size(n: int, min_block: int = 1) -> int:
     return int(min(max(round(1.75 * n ** (1.0 / 3.0)), min_block, 1), n))
 
 
+def wild_block_signs(n: int, block: int, n_boot: int, rng: np.random.Generator) -> FloatArray:
+    """Random +1/-1 multipliers for a wild block bootstrap, shape (n_boot, n).
+
+    Every observation keeps its own residual in its own place; only its sign is flipped, and
+    neighbours within a block of ``block`` observations flip together. That keeps both
+    short-range autocorrelation and changes in volatility over time (a residual from a calm
+    year never lands in a wild one). Block edges start at a random offset in each draw.
+    """
+    n_blocks = -(-n // block) + 1  # one spare, because the offset shifts the edges
+    signs = rng.choice(np.array([-1.0, 1.0]), size=(n_boot, n_blocks))
+    offset = rng.integers(0, block, size=n_boot)
+    which = (np.arange(n)[None, :] + offset[:, None]) // block
+    out: FloatArray = np.take_along_axis(signs, which, axis=1)
+    return out
+
+
 def block_bootstrap_indices(n: int, block: int, rng: np.random.Generator) -> NDArray[np.intp]:
     """Draw indices for one moving-block bootstrap sample of length ``n``.
 

@@ -21,6 +21,9 @@ measures something different: how the edge shrinks across *calendar time* (month
   interval, compared against a straight-line fade.
 - **Break and publication tests.** Did the edge drop at a date you chose, at an unknown date,
   or after the academic paper came out (the McLean & Pontiff 2016 effect)?
+- **A floor test.** `fit_floor_decay`: does the edge fade all the way to zero, or level off and
+  survive at a smaller size?
+- **No code needed.** The `alphafade` command runs a report straight from a CSV file.
 - **A crowding score.** Lou & Polk comomentum: how much a trade's stocks move together.
 - **Lifetime forecasts.** `signal_lifetime`: when does a fading edge reach a level you care about?
 - **Many signals at once.** `compare_signals` ranks them and corrects for testing many (otherwise
@@ -40,8 +43,9 @@ summary.
 ## Why trust it
 
 - Every t-statistic is autocorrelation-robust (Newey-West) and checked against statsmodels.
-- Confidence intervals were tested by simulation: they contain the true half-life 89-95% of
-  the time, and flag decay in pure noise only 2-6% of the time.
+- Confidence intervals were tested by simulation: `fit_decay`'s contain the true half-life
+  89-95% of the time, and with steady noise it flags decay in pure noise only 2-6% of the time
+  (more if volatility changes a lot: see Limitations).
 - Nothing is dropped, resampled, or shifted behind your back; anything lossy raises a warning.
 - Bad inputs get a clear error that says how to fix them, never a confident wrong number.
 - 500+ tests on Python 3.11 to 3.14, strict type checking, and a fully documented method
@@ -55,6 +59,43 @@ pip install "alphafade[plot]"     # + matplotlib for report.plot()
 ```
 
 Python 3.11 or newer. With [uv](https://docs.astral.sh/uv/): `uv add "alphafade[plot]"`.
+
+## No Python? Use the command line
+
+Put your dates and returns in a CSV file (a spreadsheet saved as comma-separated text):
+
+```text
+date,ret
+1980-01-31,0.012
+1980-02-29,-0.004
+```
+
+Then run one command:
+
+```bash
+alphafade report returns.csv
+```
+
+```bash
+alphafade floor returns.csv
+```
+
+`report` runs the full analysis. `floor` asks whether the edge fades to zero or levels off.
+Useful options:
+
+| Option | What it does |
+|---|---|
+| `--percent` | Your file says `5` for 5% (otherwise returns are decimals: `0.05`). |
+| `--column NAME`, `--date-column NAME` | Pick columns when the file has several. |
+| `--date-format %d/%m/%Y` | Needed for dates not written as `2020-01-31`, `2020-01`, `20200131` or `202001`. |
+| `--sample-end`, `--publication-date` | Add the publication-effect test (`report` only). |
+| `--plot chart.png` | Save a chart (`report` only; needs `alphafade[plot]`). |
+| `--json` | Machine-readable output. |
+| `--seed N` | Change the random seed (default 0, so results repeat). |
+
+With [uv](https://docs.astral.sh/uv/) you can run it without installing anything first:
+`uvx alphafade report returns.csv`. `python -m alphafade` works too. The command never sorts,
+fills or guesses at your data: if something is unclear, it stops and says how to fix it.
 
 ## Quickstart
 
@@ -168,6 +209,36 @@ lowers, but cannot remove, the chance that pure noise is flagged: with other see
 setup occasionally flags the noise series too. `FadeReport.to_dict()` and `.to_json()` export
 a report's headline numbers as plain data.
 
+### Does it fade to zero, or level off?
+
+`fit_decay` assumes a dying edge ends at zero. `fit_floor_decay` estimates where it ends:
+
+```python
+import numpy as np, pandas as pd
+import alphafade as af
+
+rng = np.random.default_rng(0)
+dates = pd.date_range("1970-01-31", periods=600, freq="ME")      # 50 years
+years = np.arange(600) / 12
+true = 0.03 + 0.07 * np.exp(-years / 6)                          # true floor: 0.03
+ic = pd.Series(true + rng.normal(0, 0.02, 600), index=dates)
+
+fit = af.fit_floor_decay(ic, rng=0)
+print(fit.summary())
+```
+
+```text
+Floor decay fit on 600 observations (1970-01 to 2019-12).
+The edge started at 0.1005 and is fading toward a floor of 0.02893 (95% CI 0.02686 to 0.03104), which is 29% of where it started. The gap to the floor halves every 4.4 years (95% CI 3.6 to 5.3).
+The whole floor interval is on the starting side of zero, so on this evidence some of the edge survives.
+A floor describes where the fitted curve is heading if it keeps this shape. It is not a promise about the future.
+```
+
+A floor is harder to measure than a half-life. If the data can't tell, or the curve hasn't
+visibly levelled off yet, you get that answer instead of a number. On noisy monthly returns
+that is the usual result (simulations with 60 years of data reported a floor only 3-10% of the
+time), so a per-date IC series is the better input.
+
 ## Public API
 
 | Function / class | What it does |
@@ -177,6 +248,7 @@ a report's headline numbers as plain data.
 | `rolling_ic(signal, fwd_returns, window=36)` | Rolling mean IC. |
 | `rolling_sharpe(returns, window=252)` | Annualized rolling Sharpe ratio (frequency inferred). |
 | `fit_decay(perf, n_boot=1000, rng=None)` → `DecayFit` | Exponential decay *a*·e^(−λt) over calendar years: half-life, block-bootstrap CI, linear comparison (AIC), linear fallback. |
+| `fit_floor_decay(perf, n_boot=1000, rng=None)` → `FloorFit` | Does the edge fade to zero or level off? Floor with a wild-bootstrap CI, reported only when the curve visibly levels off. |
 | `find_break(returns, method="sup_wald")` → `BreakResult` | Unknown-date break search (Andrews sup-Wald, or CUSUM). |
 | `chow_test(returns, date)` → `BreakResult` | Did the average change at a date you chose in advance? |
 | `publication_gap(returns, sample_end, publication_date)` → `GapResult` | McLean & Pontiff split: in-sample / post-sample / post-publication means, Sharpe, % declines, Newey-West t-stats. |
@@ -224,8 +296,14 @@ backtester and doesn't build portfolios; you bring returns or a signal.
   distribution (reproducible: `scripts/make_supwald_table.py`) and are floored at 0.0005.
   In simulations its false-alarm rate is close to 5% at a few hundred observations but can
   rise under strong autocorrelation. It gives up a little power to stay honest.
-- **Decay toward zero.** The exponential model assumes the edge fades to 0, not to some
-  permanent floor. A linear trend is always fitted alongside for comparison.
+- **Decay toward zero.** `fit_decay` assumes the edge fades to 0. `fit_floor_decay` estimates
+  a floor instead, but needs much more data, and a floor is an extrapolation: if the fade is
+  slower than your sample, it usually reports nothing, and the rare floor it does report can
+  be badly wrong. When the true floor is zero it still says "survives" in about 3-6% of
+  simulations.
+- **Noisy early years can fool `fit_decay`.** If volatility was much higher early on, its
+  false-alarm rate rises: about 12% in simulations where the first 8 of 40 years were four
+  times as volatile, against 6% with steady noise.
 - **Survivorship bias.** If your stock universe contains only companies that exist today,
   the IC and crowding scores are biased (the losers that got delisted are missing). Use a
   point-in-time universe such as CRSP when you can.
