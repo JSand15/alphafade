@@ -14,7 +14,7 @@ and every decision that refines or overrides the spec, with its reason.
 | M4 crowding_score | Done 2026-09-27: 171 passed, crowding.py 97% coverage |
 | M5 analyze/FadeReport, plotting, Ken French loader, README, UMD example | Done 2026-09-27: 186 passed, 99% total coverage |
 | M6 CI, packaging, TestPyPI release | Done except the release itself: CI green on GitHub (10 jobs); the release workflow is ready and waits on Jeevun's one-time trusted-publisher setup (RELEASING.md) |
-| M8 0.2.0: floor model + command line (approved 2026-11-24) | Built and committed on branch `feature/0.2.0` 2026-11-24: 636 passed, 2 deselected, 98% coverage. Not merged, pushed or released |
+| M8 0.2.0: floor model + command line (approved 2026-11-24) | Done 2026-11-24: 636 passed, 2 deselected, 98% coverage. Merged 2026-11-25 (PR 1); tag `v0.2.0` pushed for release |
 | M7 Five extra features (approved 2026-09-29) | Done 2026-09-29: `signal_lifetime`, `compare_signals`, `walk_forward_decay`, `ic_by_horizon`, `FadeReport.to_dict/to_json`; independent review found no math errors; 506+ tests on 3.11-3.14 and lowest deps |
 
 **Released:** alphafade 0.1.1 is live on PyPI (https://pypi.org/project/alphafade/, 2026-10-06),
@@ -22,8 +22,8 @@ published by `.github/workflows/release.yml` via trusted publishing and verified
 `pip install`. Next release: bump `__version__`, update CHANGELOG, tag `vX.Y.Z`, approve the
 `pypi` environment in the Actions tab.
 
-**Next action:** Jeevun reviews 0.2.0. Then merge `feature/0.2.0` into `main`, check CI, set the
-CHANGELOG date to the release day, and tag `v0.2.0`.
+**Next action:** Jeevun approves the `pypi` environment on the `v0.2.0` release run, then verify
+a fresh `pip install alphafade==0.2.0`.
 
 **Open:** PyPI's trusted publisher is registered under environment `testpypi`, so the first
 upload job fails every release and the fallback uploads. Fix: Jeevun adds a publisher with
